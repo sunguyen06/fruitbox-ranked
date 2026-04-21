@@ -31,7 +31,7 @@ function createFruitCell(
 ): FruitCell {
   return {
     id: `${seed}-${row}-${col}-${Math.floor(rng() * 1_000_000_000).toString(36)}`,
-    kind: pickOne(rng, FRUIT_KINDS),
+    kind: "apple",
     value: randomInt(rng, 1, MAX_FRUIT_VALUE),
     row,
     col,

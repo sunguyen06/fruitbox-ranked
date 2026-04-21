@@ -21,24 +21,33 @@ interface FruitboxGameProps {
 }
 
 interface DragSelection {
-  start: GridPoint;
-  current: GridPoint;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
 }
 
 export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
   const [gameState, setGameState] = useState<GameState>(() => createNewGame(initialSeed));
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
 
-  const previewSelection: SelectionRect | null = dragSelection
+  // Compute visual selection box directly from pixel coords without grid snapping
+  const visualSelectionRect = dragSelection
     ? {
-        start: dragSelection.start,
-        end: dragSelection.current,
+        top: Math.min(dragSelection.startY, dragSelection.currentY),
+        left: Math.min(dragSelection.startX, dragSelection.currentX),
+        width: Math.abs(dragSelection.currentX - dragSelection.startX),
+        height: Math.abs(dragSelection.currentY - dragSelection.startY),
       }
     : null;
+
+  // Compute grid selection for cell highlighting
+  const previewSelection: SelectionRect | null = dragSelection
+    ? getGridSelectionFromPixels(dragSelection, gameState.rows, gameState.cols)
+    : null;
   const previewCells = getSelectedCells(gameState.board, previewSelection);
-  const previewSum = sumSelectedCells(previewCells);
-  const previewRect = previewSelection ? normalizeSelectionRect(previewSelection) : null;
   const previewSelectedIds = new Set(previewCells.map((cell) => cell.id));
+  const previewSum = sumSelectedCells(previewCells);
   const selectionState =
     previewCells.length === 0 ? "idle" : previewSum === TARGET_SUM ? "valid" : "invalid";
 
@@ -86,15 +95,17 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
       return;
     }
 
-    const point = resolveGridPoint(event, gameState.rows, gameState.cols);
-
-    if (!point) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width === 0 || bounds.height === 0) {
       return;
     }
 
+    const relativeX = (event.clientX - bounds.left) / bounds.width;
+    const relativeY = (event.clientY - bounds.top) / bounds.height;
+
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragSelection({ start: point, current: point });
+    setDragSelection({ startX: relativeX, startY: relativeY, currentX: relativeX, currentY: relativeY });
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -102,27 +113,23 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
       return;
     }
 
-    const point = resolveGridPoint(event, gameState.rows, gameState.cols);
-
-    if (!point) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width === 0 || bounds.height === 0) {
       return;
     }
+
+    const relativeX = (event.clientX - bounds.left) / bounds.width;
+    const relativeY = (event.clientY - bounds.top) / bounds.height;
 
     setDragSelection((currentSelection) => {
       if (!currentSelection) {
         return currentSelection;
       }
 
-      if (
-        currentSelection.current.row === point.row &&
-        currentSelection.current.col === point.col
-      ) {
-        return currentSelection;
-      }
-
       return {
         ...currentSelection,
-        current: point,
+        currentX: relativeX,
+        currentY: relativeY,
       };
     });
   }
@@ -132,20 +139,26 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
       return;
     }
 
-    const endPoint = resolveGridPoint(event, gameState.rows, gameState.cols) ?? dragSelection.current;
-    const finishedSelection: SelectionRect = {
-      start: dragSelection.start,
-      end: endPoint,
-    };
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const relativeX = bounds.width === 0 ? dragSelection.currentX : (event.clientX - bounds.left) / bounds.width;
+    const relativeY = bounds.height === 0 ? dragSelection.currentY : (event.clientY - bounds.top) / bounds.height;
+
+    const finishedSelection = getGridSelectionFromPixels(
+      { startX: dragSelection.startX, startY: dragSelection.startY, currentX: relativeX, currentY: relativeY },
+      gameState.rows,
+      gameState.cols,
+    );
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
     setDragSelection(null);
-    startTransition(() => {
-      setGameState((currentState) => applySelectionToGame(currentState, finishedSelection));
-    });
+    if (finishedSelection) {
+      startTransition(() => {
+        setGameState((currentState) => applySelectionToGame(currentState, finishedSelection));
+      });
+    }
   }
 
   function handlePointerCancel(event: PointerEvent<HTMLDivElement>) {
@@ -157,32 +170,11 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-      <div className="relative w-full max-w-[1280px] overflow-hidden rounded-[2rem] border border-white/55 bg-[linear-gradient(180deg,rgba(255,251,243,0.97)_0%,rgba(255,242,224,0.94)_100%)] p-4 shadow-[0_24px_90px_rgba(74,44,27,0.14)] backdrop-blur xl:p-6">
-        <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top,rgba(255,181,71,0.22),transparent_62%)]" />
-
-        <div className="relative flex flex-col gap-6">
-          <header className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.34em] text-[#1d6f42]">
-              Fruitbox Ranked
-            </p>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl space-y-2">
-                <h1 className="text-4xl font-semibold tracking-tight text-stone-950 sm:text-5xl">
-                  Prototype the core puzzle loop first.
-                </h1>
-                <p className="max-w-2xl text-sm leading-7 text-stone-600 sm:text-base">
-                  Drag a rectangle over the fruit grid. If the selected values total exactly{" "}
-                  <span className="font-mono font-semibold text-stone-900">{TARGET_SUM}</span>, you
-                  score one point per fruit removed.
-                </p>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-white/60 bg-white/70 px-4 py-3 text-sm text-stone-600 shadow-[0_12px_36px_rgba(64,37,23,0.08)]">
-                Removed fruit stay gone in this MVP so board state stays deterministic, easy to
-                validate, and ready for later server-authoritative multiplayer.
-              </div>
-            </div>
+    <main className="flex min-h-screen items-center justify-center px-4 py-8 bg-gray-100">
+      <div className="relative w-full max-w-[1152px] overflow-hidden rounded-lg bg-white p-6 shadow-lg">
+        <div className="relative flex flex-col gap-4">
+          <header className="space-y-2 text-center">
+            <h1 className="text-2xl font-bold text-stone-800">Fruitbox</h1>
           </header>
 
           <GameHud
@@ -200,8 +192,9 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
                 rows={gameState.rows}
                 cols={gameState.cols}
                 selectedCellIds={previewSelectedIds}
-                selectionRect={previewRect}
-                selectionState={selectionState}
+                selectionRect={null}
+                visualSelectionRect={visualSelectionRect}
+                selectionState={previewSum === TARGET_SUM ? "valid" : "invalid"}
                 isInteractive={gameState.status === "active"}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -218,84 +211,11 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
                 />
               ) : null}
             </div>
-
-            <div className="grid w-full gap-3 lg:grid-cols-[1.4fr_1fr]">
-              <StatusPanel
-                title="Selection Preview"
-                tone={
-                  selectionState === "valid"
-                    ? "text-emerald-700"
-                    : selectionState === "invalid"
-                      ? "text-rose-700"
-                      : "text-stone-700"
-                }
-                body={getSelectionCopy(previewCells.length, previewSum, selectionState)}
-              />
-              <StatusPanel
-                title="Last Move"
-                tone={gameState.lastMove?.isValid ? "text-emerald-700" : "text-stone-700"}
-                body={getLastMoveCopy(gameState)}
-              />
-            </div>
           </section>
         </div>
       </div>
     </main>
   );
-}
-
-function StatusPanel({
-  title,
-  body,
-  tone,
-}: {
-  title: string;
-  body: string;
-  tone: string;
-}) {
-  return (
-    <div className="rounded-[1.5rem] border border-white/60 bg-white/80 px-5 py-4 shadow-[0_12px_36px_rgba(64,37,23,0.08)]">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-stone-500">
-        {title}
-      </p>
-      <p className={`mt-3 text-sm leading-7 ${tone}`}>{body}</p>
-    </div>
-  );
-}
-
-function getSelectionCopy(
-  selectedCount: number,
-  previewSum: number,
-  selectionState: "idle" | "valid" | "invalid",
-): string {
-  if (selectedCount === 0 || selectionState === "idle") {
-    return "Drag across the board to frame a rectangle. The preview updates live as you grow or shrink the box.";
-  }
-
-  if (selectionState === "valid") {
-    return `${selectedCount} fruit selected. Sum ${previewSum} hits the target exactly, so releasing now will score ${selectedCount}.`;
-  }
-
-  const difference = TARGET_SUM - previewSum;
-  const direction = difference > 0 ? "below" : "above";
-
-  return `${selectedCount} fruit selected. Sum ${previewSum} is ${Math.abs(difference)} ${direction} the target, so this box will not clear.`;
-}
-
-function getLastMoveCopy(gameState: GameState): string {
-  if (!gameState.lastMove) {
-    return "No moves yet. Early server-authoritative multiplayer can use this same pure move result shape to validate clients.";
-  }
-
-  if (gameState.lastMove.isValid) {
-    return `Cleared ${gameState.lastMove.selectedCount} fruit for ${gameState.lastMove.scoreDelta} points with a perfect sum of ${gameState.lastMove.sum}.`;
-  }
-
-  if (gameState.lastMove.selectedCount === 0) {
-    return "That rectangle only covered empty spaces, so the board stayed unchanged.";
-  }
-
-  return `That box summed to ${gameState.lastMove.sum}, so nothing was removed. Only exact ${TARGET_SUM}s score.`;
 }
 
 function resolveGridPoint(
@@ -315,6 +235,22 @@ function resolveGridPoint(
   return {
     row: clampIndex(Math.floor(relativeY * rows), rows),
     col: clampIndex(Math.floor(relativeX * cols), cols),
+  };
+}
+
+function getGridSelectionFromPixels(
+  pixelSelection: DragSelection,
+  rows: number,
+  cols: number,
+): SelectionRect | null {
+  const startCol = clampIndex(Math.floor(pixelSelection.startX * cols), cols);
+  const startRow = clampIndex(Math.floor(pixelSelection.startY * rows), rows);
+  const endCol = clampIndex(Math.floor(pixelSelection.currentX * cols), cols);
+  const endRow = clampIndex(Math.floor(pixelSelection.currentY * rows), rows);
+
+  return {
+    start: { row: startRow, col: startCol },
+    end: { row: endRow, col: endCol },
   };
 }
 

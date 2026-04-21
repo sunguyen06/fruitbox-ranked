@@ -14,6 +14,7 @@ interface GameBoardProps {
   cols: number;
   selectedCellIds: Set<string>;
   selectionRect: NormalizedSelectionRect | null;
+  visualSelectionRect: { top: number; left: number; width: number; height: number } | null;
   selectionState: SelectionState;
   isInteractive: boolean;
   onPointerDown: PointerEventHandler<HTMLDivElement>;
@@ -30,28 +31,8 @@ const FRUIT_THEMES: Record<
   }
 > = {
   apple: {
-    skin: "border-[#ff8466] bg-[linear-gradient(180deg,#ff9b79_0%,#ff6b35_55%,#d9481a_100%)]",
-    glow: "bg-white/40",
-  },
-  orange: {
-    skin: "border-[#ffc069] bg-[linear-gradient(180deg,#ffd8a8_0%,#ff922b_52%,#f76707_100%)]",
-    glow: "bg-white/35",
-  },
-  pear: {
-    skin: "border-[#d8f5a2] bg-[linear-gradient(180deg,#efffb0_0%,#94d82d_55%,#5c940d_100%)]",
-    glow: "bg-white/30",
-  },
-  berry: {
-    skin: "border-[#ffb3f4] bg-[linear-gradient(180deg,#ffc9f7_0%,#f06595_50%,#c2255c_100%)]",
-    glow: "bg-white/35",
-  },
-  plum: {
-    skin: "border-[#d0bfff] bg-[linear-gradient(180deg,#e5dbff_0%,#9775fa_50%,#6741d9_100%)]",
-    glow: "bg-white/30",
-  },
-  melon: {
-    skin: "border-[#8ce99a] bg-[linear-gradient(180deg,#b2f2bb_0%,#38d9a9_50%,#0ca678_100%)]",
-    glow: "bg-white/30",
+    skin: "border-2 border-[#c41e3a] bg-[#e63946]",
+    glow: "bg-transparent",
   },
 };
 
@@ -61,6 +42,7 @@ export function GameBoard({
   cols,
   selectedCellIds,
   selectionRect,
+  visualSelectionRect,
   selectionState,
   isInteractive,
   onPointerDown,
@@ -72,10 +54,10 @@ export function GameBoard({
     <div className="w-full max-w-[1100px]">
       <div
         className={cx(
-          "relative w-full overflow-hidden rounded-[2rem] border border-white/20 bg-[linear-gradient(180deg,#23433b_0%,#17312b_100%)] shadow-[0_24px_80px_rgba(18,26,24,0.28)] select-none touch-none",
+          "relative w-full overflow-hidden rounded-lg border-4 border-yellow-600 select-none touch-none",
           isInteractive ? "cursor-crosshair" : "cursor-not-allowed opacity-90",
         )}
-        style={{ aspectRatio: `${cols} / ${rows}` }}
+        style={{ aspectRatio: `${cols} / ${rows}`, background: "linear-gradient(to right, #c3f0c9 0%, #c3f0c9 100%)" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -95,34 +77,31 @@ export function GameBoard({
                 return (
                   <div
                     key={`empty-${rowIndex}-${colIndex}`}
-                    className="border border-white/8 bg-black/10 p-1"
-                  >
-                    <div className="h-full w-full rounded-[0.9rem] border border-dashed border-white/8 bg-black/10" />
-                  </div>
+                    className="h-full w-full"
+                  />
                 );
               }
 
-              const theme = FRUIT_THEMES[cell.kind];
               const isSelected = selectedCellIds.has(cell.id);
+              const appleImage = isSelected
+                ? selectionState === "valid"
+                  ? "/green-apple.png"
+                  : "/yellow-apple.png"
+                : "/apple.png";
 
               return (
-                <div key={cell.id} className="border border-white/8 bg-black/10 p-1">
+                <div key={cell.id} className="h-full w-full">
                   <div
                     className={cx(
-                      "relative flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] border text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_18px_rgba(0,0,0,0.12)] transition duration-100",
-                      theme.skin,
-                      isSelected && selectionState === "valid" && "scale-[0.96] ring-4 ring-emerald-300/85",
-                      isSelected && selectionState === "invalid" && "scale-[0.96] ring-4 ring-rose-300/85",
+                      "relative flex h-full w-full items-center justify-center overflow-hidden transition duration-100",
                     )}
                   >
-                    <div className="absolute left-[14%] top-[10%] h-[16%] w-[28%] rotate-[-30deg] rounded-full bg-[#86efac]/95 shadow-[0_0_12px_rgba(34,197,94,0.45)]" />
-                    <div
-                      className={cx(
-                        "absolute left-[22%] top-[22%] h-[18%] w-[18%] rounded-full blur-[1px]",
-                        theme.glow,
-                      )}
+                    <img
+                      src={appleImage}
+                      alt="apple"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
-                    <span className="relative font-mono text-[clamp(0.7rem,1.75vw,1.15rem)] font-semibold tracking-tight text-white drop-shadow-[0_1px_0_rgba(0,0,0,0.28)]">
+                    <span className="relative z-10 font-mono text-2xl font-bold text-white">
                       {cell.value}
                     </span>
                   </div>
@@ -132,19 +111,19 @@ export function GameBoard({
           )}
         </div>
 
-        {selectionRect ? (
+        {visualSelectionRect ? (
           <div
             className={cx(
-              "pointer-events-none absolute z-10 rounded-[1.2rem] border-4 shadow-[0_0_0_999px_rgba(5,10,18,0.08)]",
+              "pointer-events-none absolute z-10 border-[2px]",
               selectionState === "valid"
-                ? "border-emerald-300 bg-emerald-300/15"
-                : "border-rose-300 bg-rose-300/15",
+                ? "border-green-500 bg-green-300/50"
+                : "border-yellow-500 bg-yellow-300/50",
             )}
             style={{
-              top: `${(selectionRect.top / rows) * 100}%`,
-              left: `${(selectionRect.left / cols) * 100}%`,
-              width: `${((selectionRect.right - selectionRect.left + 1) / cols) * 100}%`,
-              height: `${((selectionRect.bottom - selectionRect.top + 1) / rows) * 100}%`,
+              top: `${visualSelectionRect.top * 100}%`,
+              left: `${visualSelectionRect.left * 100}%`,
+              width: `${visualSelectionRect.width * 100}%`,
+              height: `${visualSelectionRect.height * 100}%`,
             }}
           />
         ) : null}
