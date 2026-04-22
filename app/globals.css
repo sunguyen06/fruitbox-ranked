@@ -41,3 +41,35 @@ button {
 ::selection {
   background: rgba(255, 107, 53, 0.22);
 }
+
+@keyframes menu-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0);
+  }
+}
+
+@keyframes menu-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.menu-float {
+  animation: menu-float 8s ease-in-out infinite;
+}
+
+.menu-float-slow {
+  animation: menu-float 11s ease-in-out infinite;
+}
+
+.menu-pulse {
+  animation: menu-pulse 5s ease-in-out infinite;
+}

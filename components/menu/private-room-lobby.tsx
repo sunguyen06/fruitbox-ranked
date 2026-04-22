@@ -18,92 +18,101 @@ export function PrivateRoomLobby({
   onLeave,
 }: PrivateRoomLobbyProps) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-8 bg-gray-100">
-      <div className="w-full max-w-[840px] rounded-lg bg-white p-6 shadow-lg">
-        <div className="space-y-6">
-          <header className="space-y-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-stone-800">Private Room</h1>
-                <p className="text-sm text-stone-500">
-                  Share this code with another player to join the room.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onLeave}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
-              >
-                Leave Room
-              </button>
-            </div>
-          </header>
-
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-stone-500">Room Code</p>
-            <p className="mt-2 font-mono text-3xl font-bold tracking-[0.24em] text-stone-900">
-              {room.roomCode}
+    <div className="mx-auto w-full max-w-[920px] rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.92))] p-6 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-8">
+      <div className="space-y-6">
+        <header className="flex flex-col gap-4 text-center sm:flex-row sm:items-start sm:justify-between sm:text-left">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl">
+              Private Room
+            </h2>
+            <p className="max-w-xl text-sm text-[#f0d7bc] sm:text-base">
+              Share this room code, wait for your opponent, and start the same-seed match together.
             </p>
           </div>
 
-          {statusMessage ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {statusMessage}
+          <button
+            type="button"
+            onClick={onLeave}
+            className="rounded-[1.15rem] border border-white/12 bg-white/6 px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-[#fff0de] transition hover:bg-white/10"
+          >
+            Leave Room
+          </button>
+        </header>
+
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_1.35fr]">
+          <section className="space-y-4 rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-[1.4rem] border border-white/10 bg-[#171022] px-5 py-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#f9deb6]">
+                Room Code
+              </p>
+              <p className="mt-3 font-mono text-4xl font-black tracking-[0.28em] text-white">
+                {room.roomCode}
+              </p>
             </div>
-          ) : null}
 
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-            {room.status === "waiting"
-              ? `Waiting for players: ${room.players.length}/${room.playerCapacity}`
-              : "Match is starting."}
-          </div>
+            <div className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-4 text-sm text-[#f4dfca]">
+              {room.status === "waiting"
+                ? `Waiting for players: ${room.players.length}/${room.playerCapacity}`
+                : "Match is starting."}
+            </div>
 
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-stone-800">Players in Room</h2>
-              <span className="text-sm text-stone-500">
+            {statusMessage ? (
+              <div className="rounded-[1.4rem] border border-[#ffd28f]/22 bg-[#6a4e1f]/18 px-4 py-3 text-sm text-[#ffd9a5]">
+                {statusMessage}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={!canStart}
+              className="w-full rounded-[1.3rem] bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-[linear-gradient(135deg,#7a6854,#97826a)] disabled:shadow-none"
+            >
+              {isHost ? "Start Match" : "Host Starts Match"}
+            </button>
+          </section>
+
+          <section className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Players in Room</h3>
+              <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#f4dfca]">
                 {room.players.length}/{room.playerCapacity}
               </span>
             </div>
 
             <div className="grid gap-3">
-              {room.players.map((player) => (
+              {room.players.map((player, index) => (
                 <div
                   key={player.sessionId}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-3"
+                  className="flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] px-4 py-4"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-stone-800">{player.displayName}</p>
-                      <p className="text-xs text-stone-500">{player.sessionId}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#ffb347,#ff6f35)] text-base font-black text-white shadow-[0_10px_28px_rgba(255,111,53,0.22)]">
+                      {index + 1}
                     </div>
-                    {player.isHost ? (
-                      <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
-                        Host
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
-                        Player
-                      </span>
-                    )}
+                    <div>
+                      <p className="font-semibold text-white">{player.displayName}</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#e0b98d]">
+                        {player.sessionId.slice(0, 10)}
+                      </p>
+                    </div>
                   </div>
+
+                  <span
+                    className={
+                      player.isHost
+                        ? "rounded-full border border-[#ffd28f]/22 bg-[#6a4e1f]/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#ffd99d]"
+                        : "rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#f3e4cf]"
+                    }
+                  >
+                    {player.isHost ? "Host" : "Player"}
+                  </span>
                 </div>
               ))}
             </div>
           </section>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={onStart}
-              disabled={!canStart}
-              className="rounded-lg bg-[#1d6f42] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#175a35] disabled:cursor-not-allowed disabled:bg-[#80ad95]"
-            >
-              {isHost ? "Start Match" : "Host Starts Match"}
-            </button>
-          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

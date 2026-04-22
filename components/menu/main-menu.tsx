@@ -1,5 +1,4 @@
 interface MainMenuProps {
-  connectionStatus: "disabled" | "connecting" | "connected" | "disconnected";
   statusMessage: string | null;
   onFindRanked: () => void;
   onFindCasual: () => void;
@@ -8,7 +7,6 @@ interface MainMenuProps {
 }
 
 export function MainMenu({
-  connectionStatus,
   statusMessage,
   onFindRanked,
   onFindCasual,
@@ -16,74 +14,98 @@ export function MainMenu({
   onJoinPrivateRoom,
 }: MainMenuProps) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-8 bg-gray-100">
-      <div className="w-full max-w-[720px] rounded-lg bg-white p-6 shadow-lg">
-        <div className="space-y-6">
-          <header className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold text-stone-800">Fruitbox</h1>
-            <p className="text-sm text-stone-500">
-              Multiplayer foundation menu
+    <div className="mx-auto w-full max-w-[760px]">
+      <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.9),rgba(30,21,15,0.92))] p-5 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-7">
+        <div className="space-y-5">
+          <div className="text-center">
+            <p className="text-sm text-[#f0d7bc]">
+              Choose how you want to enter the arena.
             </p>
-          </header>
-
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-            Realtime status:{" "}
-            <span className="font-semibold capitalize text-stone-800">{connectionStatus}</span>
           </div>
 
           {statusMessage ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="rounded-[1.4rem] border border-[#ffd28f]/22 bg-[#6a4e1f]/18 px-4 py-3 text-sm text-[#ffd9a5]">
               {statusMessage}
             </div>
           ) : null}
 
-          <div className="grid gap-3">
-            <button
-              type="button"
+          <div className="grid gap-4">
+            <ActionButton
+              title="Find Ranked Match"
+              description="Battle on the same seed in the competitive ladder."
+              accent="apple"
               onClick={onFindRanked}
-              className="rounded-lg bg-stone-900 px-4 py-4 text-left text-white transition hover:bg-stone-800"
-            >
-              <div className="font-semibold">Find Ranked Match</div>
-              <div className="mt-1 text-sm text-stone-300">
-                Queue flow can be wired in later.
-              </div>
-            </button>
+            />
 
-            <button
-              type="button"
+            <ActionButton
+              title="Find Casual Match"
+              description="Jump into a relaxed public match without ranked pressure."
+              accent="gold"
               onClick={onFindCasual}
-              className="rounded-lg bg-stone-900 px-4 py-4 text-left text-white transition hover:bg-stone-800"
-            >
-              <div className="font-semibold">Find Casual Match</div>
-              <div className="mt-1 text-sm text-stone-300">
-                Queue flow can be wired in later.
-              </div>
-            </button>
+            />
 
-            <button
-              type="button"
-              onClick={onCreatePrivateRoom}
-              className="rounded-lg bg-[#1d6f42] px-4 py-4 text-left text-white transition hover:bg-[#175a35]"
-            >
-              <div className="font-semibold">Create Private Room</div>
-              <div className="mt-1 text-sm text-green-100">
-                Create a lobby, share a code, and start when ready.
-              </div>
-            </button>
+            <div className="grid gap-4 md:grid-cols-2">
+              <ActionButton
+                title="Create Private Room"
+                description="Open a lobby, share the code, and start once both players are in."
+                accent="leaf"
+                onClick={onCreatePrivateRoom}
+              />
 
-            <button
-              type="button"
-              onClick={onJoinPrivateRoom}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-4 text-left text-stone-800 transition hover:border-stone-400"
-            >
-              <div className="font-semibold">Join Private Room</div>
-              <div className="mt-1 text-sm text-stone-500">
-                Enter a room code and join an existing lobby.
-              </div>
-            </button>
+              <ActionButton
+                title="Join Private Room"
+                description="Enter a room code to join a friend's lobby."
+                accent="glass"
+                onClick={onJoinPrivateRoom}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </main>
+    </div>
+  );
+}
+
+interface ActionButtonProps {
+  title: string;
+  description: string;
+  accent: "apple" | "gold" | "leaf" | "glass";
+  onClick: () => void;
+}
+
+function ActionButton({
+  title,
+  description,
+  accent,
+  onClick,
+}: ActionButtonProps) {
+  const styles = {
+    apple:
+      "border-transparent bg-[linear-gradient(135deg,#ff6f35_0%,#ff9a3d_100%)] text-white shadow-[0_22px_48px_rgba(255,111,53,0.28)] hover:brightness-110",
+    gold:
+      "border-transparent bg-[linear-gradient(135deg,#ffb347_0%,#ffd15c_100%)] text-[#4a2300] shadow-[0_22px_48px_rgba(255,179,71,0.24)] hover:brightness-110",
+    leaf:
+      "border-transparent bg-[linear-gradient(135deg,#2f9a54_0%,#61c977_100%)] text-white shadow-[0_22px_48px_rgba(47,154,84,0.24)] hover:brightness-110",
+    glass:
+      "border-white/12 bg-white/6 text-white hover:bg-white/10",
+  } as const;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative overflow-hidden rounded-[1.6rem] border px-5 py-5 text-left transition ${styles[accent]}`}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_42%)] opacity-70" />
+      <div className="relative flex items-center justify-between gap-4">
+        <div>
+          <div className="text-lg font-bold tracking-[-0.02em]">{title}</div>
+          <div className="mt-2 max-w-[32rem] text-sm leading-6 text-white/75">
+            {description}
+          </div>
+        </div>
+        <div className="text-3xl text-white/75 transition group-hover:translate-x-1">{">"}</div>
+      </div>
+    </button>
   );
 }
