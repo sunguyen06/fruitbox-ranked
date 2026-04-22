@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { FruitboxGame } from "@/components/game/fruitbox-game";
+import { PrivateMatchGame } from "@/components/game/private-match-game";
 import { FruitboxRankedLogo } from "@/components/menu/fruitbox-ranked-logo";
 import { JoinPrivateRoomPanel } from "@/components/menu/join-private-room-panel";
 import { MainMenu } from "@/components/menu/main-menu";
@@ -11,21 +11,30 @@ import { PrivateRoomLobby } from "@/components/menu/private-room-lobby";
 import { useRoomClient } from "@/lib/multiplayer";
 
 interface FruitboxHomeProps {
-  fallbackSeed: string;
+  fallbackSeed?: string;
 }
 
 type MenuView = "main" | "join-private";
 
-export function FruitboxHome({ fallbackSeed }: FruitboxHomeProps) {
+export function FruitboxHome({}: FruitboxHomeProps) {
   const [view, setView] = useState<MenuView>("main");
   const [joinCode, setJoinCode] = useState("");
   const [menuMessage, setMenuMessage] = useState<string | null>(null);
   const roomClient = useRoomClient();
 
-  if (roomClient.currentRoom?.status === "active") {
+  if (
+    roomClient.currentRoom &&
+    roomClient.sessionId &&
+    roomClient.currentRoom.status !== "waiting"
+  ) {
     return (
-      <FruitboxGame
-        initialSeed={roomClient.currentRoom.matchConfig.seed || fallbackSeed}
+      <PrivateMatchGame
+        room={roomClient.currentRoom}
+        sessionId={roomClient.sessionId}
+        serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
+        statusMessage={roomClient.statusMessage}
+        onLeave={roomClient.leaveCurrentRoom}
+        onSubmitSelectionBox={roomClient.submitSelectionBox}
       />
     );
   }

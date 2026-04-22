@@ -120,6 +120,24 @@ io.on("connection", (socket) => {
 
     if (result.ok) {
       io.to(request.roomId).emit("room:updated", result.room);
+      scheduleRoomRefresh(request.roomId, result.room.countdownDurationMs + 50);
+      scheduleRoomRefresh(request.roomId, result.room.countdownDurationMs + result.room.matchConfig.durationMs + 100);
+    } else {
+      socket.emit("room:error", result.error);
+    }
+
+    ack(result);
+  });
+
+  socket.on("room:move", (request, ack) => {
+    const result = roomRegistry.submitMove(
+      request.roomId,
+      socket.data.sessionId,
+      request.selectionBox,
+    );
+
+    if (result.ok) {
+      io.to(request.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
     }
@@ -141,3 +159,13 @@ httpServer.listen(config.port, () => {
     `[fruitbox-realtime] listening on http://localhost:${config.port} (cors: ${config.corsOrigin})`,
   );
 });
+
+function scheduleRoomRefresh(roomId: string, delayMs: number) {
+  setTimeout(() => {
+    const result = roomRegistry.getRoom(roomId);
+
+    if (result.ok) {
+      io.to(roomId).emit("room:updated", result.room);
+    }
+  }, Math.max(0, delayMs));
+}

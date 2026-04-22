@@ -118,6 +118,23 @@ const game_1 = require("../lib/game");
     strict_1.default.equal((_a = nextState.lastMove) === null || _a === void 0 ? void 0 : _a.selectedCellIds[0], "cell-1-0");
     strict_1.default.equal((_b = nextState.lastMove) === null || _b === void 0 ? void 0 : _b.selectedSum, 7);
 });
+(0, node_test_1.default)("synchronizeGameClock derives remaining time from total elapsed time", () => {
+    const config = (0, game_1.createMatchConfig)("clock-sync", { durationMs: 90000 });
+    const initialState = (0, game_1.createGameState)(config);
+    const alteredState = Object.assign(Object.assign({}, initialState), { remainingMs: 70000 });
+    const syncedState = (0, game_1.synchronizeGameClock)(alteredState, 15000);
+    strict_1.default.equal(syncedState.remainingMs, 75000);
+    strict_1.default.equal(syncedState.status, "active");
+});
+(0, node_test_1.default)("synchronizeGameClock ends the game when elapsed time reaches duration", () => {
+    var _a;
+    const config = (0, game_1.createMatchConfig)("clock-end", { durationMs: 1000 });
+    const initialState = (0, game_1.createGameState)(config);
+    const syncedState = (0, game_1.synchronizeGameClock)(initialState, 1250);
+    strict_1.default.equal(syncedState.remainingMs, 0);
+    strict_1.default.equal(syncedState.status, "ended");
+    strict_1.default.equal((_a = syncedState.result) === null || _a === void 0 ? void 0 : _a.endReason, "time-expired");
+});
 function createBoard(rows) {
     return rows.map((row, rowIndex) => row.map((value, colIndex) => ({
         id: `cell-${rowIndex}-${colIndex}`,

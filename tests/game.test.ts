@@ -9,6 +9,7 @@ import {
   generateBoard,
   getSelectionPreview,
   resolveSelectionBoxToCells,
+  synchronizeGameClock,
   tickGame,
   type Board,
 } from "../lib/game";
@@ -155,6 +156,31 @@ test("selection preview and apply path share the same center-hit result", () => 
   assert.deepEqual(preview?.selectedCellIds, ["cell-1-0"]);
   assert.equal(nextState.lastMove?.selectedCellIds[0], "cell-1-0");
   assert.equal(nextState.lastMove?.selectedSum, 7);
+});
+
+test("synchronizeGameClock derives remaining time from total elapsed time", () => {
+  const config = createMatchConfig("clock-sync", { durationMs: 90_000 });
+  const initialState = createGameState(config);
+  const alteredState = {
+    ...initialState,
+    remainingMs: 70_000,
+  };
+
+  const syncedState = synchronizeGameClock(alteredState, 15_000);
+
+  assert.equal(syncedState.remainingMs, 75_000);
+  assert.equal(syncedState.status, "active");
+});
+
+test("synchronizeGameClock ends the game when elapsed time reaches duration", () => {
+  const config = createMatchConfig("clock-end", { durationMs: 1_000 });
+  const initialState = createGameState(config);
+
+  const syncedState = synchronizeGameClock(initialState, 1_250);
+
+  assert.equal(syncedState.remainingMs, 0);
+  assert.equal(syncedState.status, "ended");
+  assert.equal(syncedState.result?.endReason, "time-expired");
 });
 
 function createBoard(rows: number[][]): Board {

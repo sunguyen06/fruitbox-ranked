@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import type { RoomSnapshot } from "@/lib/multiplayer";
 
 interface PrivateRoomLobbyProps {
@@ -17,6 +20,20 @@ export function PrivateRoomLobby({
   onStart,
   onLeave,
 }: PrivateRoomLobbyProps) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (copied) {
+      const timer = setTimeout(() => setCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copied]);
+
+  function handleCopyCode() {
+    navigator.clipboard.writeText(room.roomCode);
+    setCopied(true);
+  }
+
   return (
     <div className="mx-auto w-full max-w-[920px] rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.92))] p-6 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-8">
       <div className="space-y-6">
@@ -42,12 +59,24 @@ export function PrivateRoomLobby({
         <div className="grid gap-4 lg:grid-cols-[1.05fr_1.35fr]">
           <section className="space-y-4 rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
             <div className="rounded-[1.4rem] border border-white/10 bg-[#171022] px-5 py-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#f9deb6]">
-                Room Code
-              </p>
-              <p className="mt-3 font-mono text-4xl font-black tracking-[0.28em] text-white">
-                {room.roomCode}
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#f9deb6]">
+                    Room Code
+                  </p>
+                  <p className="mt-3 font-mono text-4xl font-black tracking-[0.28em] text-white">
+                    {room.roomCode}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="rounded-[1.1rem] border border-white/12 bg-white/6 px-3 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#fff0de] transition hover:bg-white/10 active:bg-white/20"
+                  title="Copy room code to clipboard"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
             </div>
 
             <div className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-4 text-sm text-[#f4dfca]">

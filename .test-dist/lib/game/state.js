@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createGameState = createGameState;
 exports.createNewGame = createNewGame;
 exports.tickGame = tickGame;
+exports.synchronizeGameClock = synchronizeGameClock;
 exports.applySelectionToGame = applySelectionToGame;
 exports.applyResolvedSelectionToGame = applyResolvedSelectionToGame;
 exports.getSelectionPreview = getSelectionPreview;
@@ -35,6 +36,16 @@ function tickGame(state, deltaMs) {
         return state;
     }
     const remainingMs = Math.max(0, state.remainingMs - Math.max(0, deltaMs));
+    if (remainingMs === 0) {
+        return finishGame(Object.assign(Object.assign({}, state), { remainingMs }), "time-expired");
+    }
+    return Object.assign(Object.assign({}, state), { remainingMs });
+}
+function synchronizeGameClock(state, elapsedMs) {
+    if (state.endReason === "manual-stop") {
+        return state;
+    }
+    const remainingMs = Math.max(0, state.config.durationMs - Math.max(0, elapsedMs));
     if (remainingMs === 0) {
         return finishGame(Object.assign(Object.assign({}, state), { remainingMs }), "time-expired");
     }

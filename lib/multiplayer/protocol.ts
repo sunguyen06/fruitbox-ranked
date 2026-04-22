@@ -1,5 +1,5 @@
 import type { MatchConfigOverrides } from "../game/config";
-import type { GameState, MatchConfig } from "../game/types";
+import type { GameState, MatchConfig, NormalizedSelectionBox } from "../game/types";
 
 export type SessionId = string;
 export type RoomId = string;
@@ -7,7 +7,7 @@ export type MatchId = string;
 
 export type RoomVisibility = "private" | "public";
 export type MatchKind = "private" | "casual" | "ranked";
-export type RoomStatus = "waiting" | "active" | "finished";
+export type RoomStatus = "waiting" | "countdown" | "active" | "finished";
 
 export interface PlayerPresence {
   sessionId: SessionId;
@@ -17,7 +17,16 @@ export interface PlayerPresence {
   joinedAt: string;
 }
 
+export interface RoomPlayerStateSnapshot {
+  sessionId: SessionId;
+  displayName: string;
+  isHost: boolean;
+  score: number;
+  gameState: GameState | null;
+}
+
 export interface RoomSnapshot {
+  serverNow: string;
   roomId: RoomId;
   roomCode: string;
   matchId: MatchId;
@@ -25,13 +34,16 @@ export interface RoomSnapshot {
   visibility: RoomVisibility;
   status: RoomStatus;
   playerCapacity: number;
+  countdownDurationMs: number;
+  countdownEndsAt: string | null;
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;
+  finishedAt: string | null;
   hostSessionId: SessionId;
   players: PlayerPresence[];
+  playerStates: RoomPlayerStateSnapshot[];
   matchConfig: MatchConfig;
-  activeGameState: GameState | null;
 }
 
 export interface RealtimeError {
@@ -78,6 +90,11 @@ export interface StartRoomRequest {
   roomId: RoomId;
 }
 
+export interface SubmitMoveRequest {
+  roomId: RoomId;
+  selectionBox: NormalizedSelectionBox;
+}
+
 export type RoomCommandResponse =
   | {
       ok: true;
@@ -111,6 +128,10 @@ export interface ClientToServerEvents {
   ) => void;
   "room:start": (
     request: StartRoomRequest,
+    ack: (response: RoomCommandResponse) => void,
+  ) => void;
+  "room:move": (
+    request: SubmitMoveRequest,
     ack: (response: RoomCommandResponse) => void,
   ) => void;
 }

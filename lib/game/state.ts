@@ -58,6 +58,32 @@ export function tickGame(state: GameState, deltaMs: number): GameState {
   };
 }
 
+export function synchronizeGameClock(
+  state: GameState,
+  elapsedMs: number,
+): GameState {
+  if (state.endReason === "manual-stop") {
+    return state;
+  }
+
+  const remainingMs = Math.max(0, state.config.durationMs - Math.max(0, elapsedMs));
+
+  if (remainingMs === 0) {
+    return finishGame(
+      {
+        ...state,
+        remainingMs,
+      },
+      "time-expired",
+    );
+  }
+
+  return {
+    ...state,
+    remainingMs,
+  };
+}
+
 export function applySelectionToGame(
   state: GameState,
   selectionRect: SelectionRect | null,

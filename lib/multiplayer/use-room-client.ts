@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import type { NormalizedSelectionBox } from "../game";
 import { useRealtimeConnection } from "./use-realtime-connection";
 import type {
   RealtimeError,
   RoomCommandResponse,
+  RoomPlayerStateSnapshot,
   RoomSnapshot,
 } from "./protocol";
 
@@ -15,13 +17,17 @@ export interface RoomClientState {
   currentRoom: RoomSnapshot | null;
   lastError: RealtimeError | null;
   statusMessage: string | null;
+  serverTimeOffsetMs: number;
   isReady: boolean;
   isHost: boolean;
+  myPlayerState: RoomPlayerStateSnapshot | null;
+  opponentPlayerState: RoomPlayerStateSnapshot | null;
   canStartCurrentRoom: boolean;
   createPrivateRoom: () => Promise<void>;
   joinPrivateRoom: (roomCode: string) => Promise<void>;
   leaveCurrentRoom: () => Promise<void>;
   startCurrentRoom: () => Promise<void>;
+  submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<void>;
   clearStatus: () => void;
 }
 
@@ -30,6 +36,7 @@ export function useRoomClient(): RoomClientState {
   const [currentRoom, setCurrentRoom] = useState<RoomSnapshot | null>(null);
   const [lastError, setLastError] = useState<RealtimeError | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
 
   useEffect(() => {
     const socket = connection.socket;
@@ -41,6 +48,7 @@ export function useRoomClient(): RoomClientState {
     const handleRoomUpdated = (room: RoomSnapshot) => {
       setCurrentRoom(room);
       setLastError(null);
+      setServerTimeOffsetMs(Date.parse(room.serverNow) - Date.now());
     };
 
     const handleRoomError = (error: RealtimeError) => {
@@ -76,7 +84,7 @@ export function useRoomClient(): RoomClientState {
       ),
     );
 
-    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage);
+    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
   }
 
   async function joinPrivateRoom(roomCode: string) {
@@ -103,7 +111,7 @@ export function useRoomClient(): RoomClientState {
       ),
     );
 
-    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage);
+    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
   }
 
   async function leaveCurrentRoom() {
@@ -147,7 +155,26 @@ export function useRoomClient(): RoomClientState {
       ),
     );
 
-    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage);
+    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
+  }
+
+  async function submitSelectionBox(selectionBox: NormalizedSelectionBox) {
+    if (!connection.socket || !currentRoom) {
+      return;
+    }
+
+    const response = await emitRoomCommand((ack) =>
+      connection.socket!.emit(
+        "room:move",
+        {
+          roomId: currentRoom.roomId,
+          selectionBox,
+        },
+        ack,
+      ),
+    );
+
+    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
   }
 
   function clearStatus() {
@@ -165,6 +192,20 @@ export function useRoomClient(): RoomClientState {
     currentRoom.status === "waiting" &&
     currentRoom.players.length >= currentRoom.playerCapacity &&
     isHost;
+  const myPlayerState = useMemo(
+    () =>
+      sessionId && currentRoom
+        ? currentRoom.playerStates.find((playerState) => playerState.sessionId === sessionId) ?? null
+        : null,
+    [currentRoom, sessionId],
+  );
+  const opponentPlayerState = useMemo(
+    () =>
+      sessionId && currentRoom
+        ? currentRoom.playerStates.find((playerState) => playerState.sessionId !== sessionId) ?? null
+        : null,
+    [currentRoom, sessionId],
+  );
 
   return {
     connectionStatus: connection.status,
@@ -172,13 +213,17 @@ export function useRoomClient(): RoomClientState {
     currentRoom,
     lastError,
     statusMessage,
+    serverTimeOffsetMs,
     isReady: connection.status === "connected" && !!connection.session,
     isHost,
+    myPlayerState,
+    opponentPlayerState,
     canStartCurrentRoom,
     createPrivateRoom,
     joinPrivateRoom,
     leaveCurrentRoom,
     startCurrentRoom,
+    submitSelectionBox,
     clearStatus,
   };
 }
@@ -196,11 +241,13 @@ function applyRoomResponse(
   setCurrentRoom: (room: RoomSnapshot | null) => void,
   setLastError: (error: RealtimeError | null) => void,
   setStatusMessage: (message: string | null) => void,
+  setServerTimeOffsetMs: (offsetMs: number) => void,
 ) {
   if (response.ok) {
     setCurrentRoom(response.room);
     setLastError(null);
     setStatusMessage(null);
+    setServerTimeOffsetMs(Date.parse(response.room.serverNow) - Date.now());
     return;
   }
 
