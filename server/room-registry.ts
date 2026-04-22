@@ -221,8 +221,8 @@ export class RoomRegistry {
       return failure("not-host", "Only the host can start this room.");
     }
 
-    if (room.players.size < room.playerCapacity) {
-      return failure("room-not-ready", "Waiting for both players to join the room.");
+    if (room.players.size < 1) {
+      return failure("room-not-ready", "At least 1 player is required to start the room.");
     }
 
     if (room.status !== "waiting") {
@@ -399,11 +399,7 @@ function failure(code: RealtimeError["code"], message: string): RoomCommandRespo
 }
 
 function clampPlayerCapacity(value: number | undefined): number {
-  if (!value) {
-    return 2;
-  }
-
-  return Math.max(2, Math.min(2, value));
+  return 8;
 }
 
 function createServerId(prefix: string): string {

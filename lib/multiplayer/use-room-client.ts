@@ -190,7 +190,7 @@ export function useRoomClient(): RoomClientState {
   const canStartCurrentRoom =
     !!currentRoom &&
     currentRoom.status === "waiting" &&
-    currentRoom.players.length >= currentRoom.playerCapacity &&
+    currentRoom.players.length >= 1 &&
     isHost;
   const myPlayerState = useMemo(
     () =>

@@ -94,8 +94,12 @@ export function PrivateRoomLobby({
             <button
               type="button"
               onClick={onStart}
-              disabled={!canStart}
-              className="w-full rounded-[1.3rem] bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-[linear-gradient(135deg,#7a6854,#97826a)] disabled:shadow-none"
+              disabled={!isHost || !canStart}
+              className={`w-full rounded-[1.3rem] px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] transition ${
+                isHost
+                  ? "bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] hover:brightness-110 disabled:cursor-not-allowed disabled:bg-[linear-gradient(135deg,#7a6854,#97826a)] disabled:shadow-none"
+                  : "cursor-not-allowed bg-[#6a6854]/40 text-white/60 shadow-none"
+              }`}
             >
               {isHost ? "Start Match" : "Host Starts Match"}
             </button>
