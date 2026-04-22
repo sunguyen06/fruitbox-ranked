@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FRUIT_KINDS = exports.MAX_FRUIT_VALUE = exports.MIN_FRUIT_VALUE = exports.DEFAULT_TARGET_SUM = exports.TIMER_TICK_MS = exports.DEFAULT_MATCH_DURATION_MS = exports.DEFAULT_BOARD_COLS = exports.DEFAULT_BOARD_ROWS = void 0;
+exports.DEFAULT_BOARD_ROWS = 10;
+exports.DEFAULT_BOARD_COLS = 17;
+exports.DEFAULT_MATCH_DURATION_MS = 120000;
+exports.TIMER_TICK_MS = 100;
+exports.DEFAULT_TARGET_SUM = 10;
+exports.MIN_FRUIT_VALUE = 1;
+exports.MAX_FRUIT_VALUE = 9;
+exports.FRUIT_KINDS = ["apple"];

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "paths": {}
+  },
+  "include": [
+    "lib/game/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

@@ -1,61 +1,35 @@
+import { generateBoard } from "./board";
+import { createMatchConfig, type MatchConfigOverrides } from "./config";
 import {
-  BOARD_COLS,
-  BOARD_ROWS,
-  MATCH_DURATION_MS,
-  TARGET_SUM,
-} from "@/lib/game/constants";
-import { cloneBoard, generateBoard } from "@/lib/game/board";
-import { getSelectedCells, sumSelectedCells } from "@/lib/game/selection";
-import type { Board, FruitCell, GameState, MoveResult, SelectionRect } from "@/lib/game/types";
+  applyMove as applyGameMove,
+  applyValidatedMove,
+  createRectangleMove,
+  validateSelectedCells,
+} from "./move";
+import type {
+  FruitCell,
+  GameEndReason,
+  GameState,
+  MatchConfig,
+  SelectionRect,
+} from "./types";
 
-export function applyMove(board: Board, selectedCells: FruitCell[]): MoveResult {
-  const sum = sumSelectedCells(selectedCells);
-  const isValid = selectedCells.length > 0 && sum === TARGET_SUM;
-
-  if (!isValid) {
-    return {
-      board,
-      selectedCells,
-      selectedCount: selectedCells.length,
-      removedIds: [],
-      scoreDelta: 0,
-      sum,
-      isValid: false,
-    };
-  }
-
-  const nextBoard = cloneBoard(board);
-
-  for (const cell of selectedCells) {
-    nextBoard[cell.row][cell.col] = null;
-  }
-
+export function createGameState(config: MatchConfig, board = generateBoard(config)): GameState {
   return {
-    board: nextBoard,
-    selectedCells,
-    selectedCount: selectedCells.length,
-    removedIds: selectedCells.map((cell) => cell.id),
-    scoreDelta: selectedCells.length,
-    sum,
-    isValid: true,
+    config,
+    board,
+    score: 0,
+    remainingMs: config.durationMs,
+    status: "active",
+    endReason: null,
+    appliedMoveCount: 0,
+    lastMove: null,
+    result: null,
   };
 }
 
-export function createNewGame(
-  seed: string,
-  rows = BOARD_ROWS,
-  cols = BOARD_COLS,
-): GameState {
-  return {
-    seed,
-    rows,
-    cols,
-    board: generateBoard(seed, rows, cols),
-    score: 0,
-    remainingMs: MATCH_DURATION_MS,
-    status: "active",
-    lastMove: null,
-  };
+export function createNewGame(seed: string, overrides: MatchConfigOverrides = {}): GameState {
+  return createGameState(createMatchConfig(seed, overrides));
 }
 
 export function tickGame(state: GameState, deltaMs: number): GameState {
@@ -63,12 +37,21 @@ export function tickGame(state: GameState, deltaMs: number): GameState {
     return state;
   }
 
-  const remainingMs = Math.max(0, state.remainingMs - deltaMs);
+  const remainingMs = Math.max(0, state.remainingMs - Math.max(0, deltaMs));
+
+  if (remainingMs === 0) {
+    return finishGame(
+      {
+        ...state,
+        remainingMs,
+      },
+      "time-expired",
+    );
+  }
 
   return {
     ...state,
     remainingMs,
-    status: remainingMs === 0 ? "ended" : state.status,
   };
 }
 
@@ -76,17 +59,58 @@ export function applySelectionToGame(
   state: GameState,
   selectionRect: SelectionRect | null,
 ): GameState {
-  if (state.status === "ended" || !selectionRect) {
+  if (!selectionRect) {
     return state;
   }
 
-  const selectedCells = getSelectedCells(state.board, selectionRect);
-  const move = applyMove(state.board, selectedCells);
+  return applyGameMove(
+    state,
+    createRectangleMove(selectionRect, getElapsedMatchMs(state)),
+  );
+}
+
+export function applyResolvedSelectionToGame(
+  state: GameState,
+  selectedCells: FruitCell[],
+  selectionRect: SelectionRect | null = null,
+): GameState {
+  const fallbackSelection = selectionRect ?? {
+    start: { row: 0, col: 0 },
+    end: { row: 0, col: 0 },
+  };
+  const move = createRectangleMove(fallbackSelection, getElapsedMatchMs(state));
+  const validation = validateSelectedCells(state, selectedCells, move);
+
+  return applyValidatedMove(state, validation);
+}
+
+export function finishGame(
+  state: GameState,
+  endReason: Exclude<GameEndReason, null>,
+): GameState {
+  if (state.status === "ended") {
+    return state;
+  }
 
   return {
     ...state,
-    board: move.board,
-    score: state.score + move.scoreDelta,
-    lastMove: move,
+    status: "ended",
+    endReason,
+    result: {
+      seed: state.config.seed,
+      finalScore: state.score,
+      appliedMoveCount: state.appliedMoveCount,
+      remainingMs: state.remainingMs,
+      status: "ended",
+      endReason,
+    },
   };
+}
+
+export function isGameOver(state: GameState): boolean {
+  return state.status === "ended";
+}
+
+export function getElapsedMatchMs(state: GameState): number {
+  return state.config.durationMs - state.remainingMs;
 }

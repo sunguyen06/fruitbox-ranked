@@ -1,10 +1,7 @@
+import Image from "next/image";
 import type { PointerEventHandler } from "react";
 
-import type {
-  Board,
-  FruitKind,
-  NormalizedSelectionRect,
-} from "@/lib/game/types";
+import type { Board } from "@/lib/game";
 
 type SelectionState = "idle" | "valid" | "invalid";
 
@@ -13,7 +10,6 @@ interface GameBoardProps {
   rows: number;
   cols: number;
   selectedCellIds: Set<string>;
-  selectionRect: NormalizedSelectionRect | null;
   visualSelectionRect: { top: number; left: number; width: number; height: number } | null;
   selectionState: SelectionState;
   isInteractive: boolean;
@@ -23,25 +19,11 @@ interface GameBoardProps {
   onPointerCancel: PointerEventHandler<HTMLDivElement>;
 }
 
-const FRUIT_THEMES: Record<
-  FruitKind,
-  {
-    skin: string;
-    glow: string;
-  }
-> = {
-  apple: {
-    skin: "border-2 border-[#c41e3a] bg-[#e63946]",
-    glow: "bg-transparent",
-  },
-};
-
 export function GameBoard({
   board,
   rows,
   cols,
   selectedCellIds,
-  selectionRect,
   visualSelectionRect,
   selectionState,
   isInteractive,
@@ -57,7 +39,10 @@ export function GameBoard({
           "relative w-full overflow-hidden rounded-lg border-4 border-yellow-600 select-none touch-none",
           isInteractive ? "cursor-crosshair" : "cursor-not-allowed opacity-90",
         )}
-        style={{ aspectRatio: `${cols} / ${rows}`, background: "linear-gradient(to right, #c3f0c9 0%, #c3f0c9 100%)" }}
+        style={{
+          aspectRatio: `${cols} / ${rows}`,
+          background: "linear-gradient(to right, #c3f0c9 0%, #c3f0c9 100%)",
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -96,9 +81,11 @@ export function GameBoard({
                       "relative flex h-full w-full items-center justify-center overflow-hidden transition duration-100",
                     )}
                   >
-                    <img
+                    <Image
                       src={appleImage}
                       alt="apple"
+                      fill
+                      sizes="(max-width: 1100px) 100vw, 1100px"
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                     <span className="relative z-10 font-mono text-2xl font-bold text-white">

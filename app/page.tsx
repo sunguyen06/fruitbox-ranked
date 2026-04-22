@@ -1,5 +1,5 @@
 import { FruitboxGame } from "@/components/game/fruitbox-game";
-import { createSessionSeed } from "@/lib/game/rng";
+import { createSessionSeed } from "@/lib/game";
 
 interface HomePageProps {
   searchParams: Promise<{

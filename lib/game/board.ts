@@ -1,21 +1,11 @@
-import {
-  BOARD_COLS,
-  BOARD_ROWS,
-  FRUIT_KINDS,
-  MAX_FRUIT_VALUE,
-} from "@/lib/game/constants";
-import { pickOne, randomInt, createSeededRng } from "@/lib/game/rng";
-import type { Board, FruitCell } from "@/lib/game/types";
+import { createSeededRng, pickOne, randomInt } from "./rng";
+import type { Board, FruitCell, MatchConfig } from "./types";
 
-export function generateBoard(
-  seed: string,
-  rows = BOARD_ROWS,
-  cols = BOARD_COLS,
-): Board {
-  const rng = createSeededRng(`${seed}:${rows}x${cols}`);
+export function generateBoard(config: MatchConfig): Board {
+  const rng = createSeededRng(`${config.seed}:${config.rows}x${config.cols}`);
 
-  return Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: cols }, (_, col) => createFruitCell(rng, seed, row, col)),
+  return Array.from({ length: config.rows }, (_, row) =>
+    Array.from({ length: config.cols }, (_, col) => createFruitCell(rng, config, row, col)),
   );
 }
 
@@ -25,14 +15,14 @@ export function cloneBoard(board: Board): Board {
 
 function createFruitCell(
   rng: () => number,
-  seed: string,
+  config: MatchConfig,
   row: number,
   col: number,
 ): FruitCell {
   return {
-    id: `${seed}-${row}-${col}-${Math.floor(rng() * 1_000_000_000).toString(36)}`,
-    kind: "apple",
-    value: randomInt(rng, 1, MAX_FRUIT_VALUE),
+    id: `${config.seed}-${row}-${col}-${Math.floor(rng() * 1_000_000_000).toString(36)}`,
+    kind: pickOne(rng, config.fruitKinds),
+    value: randomInt(rng, config.minFruitValue, config.maxFruitValue),
     row,
     col,
   };
