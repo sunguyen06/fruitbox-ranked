@@ -5,8 +5,11 @@ exports.normalizeSelectionRectangle = normalizeSelectionRectangle;
 exports.resolveSelectionToCells = resolveSelectionToCells;
 exports.sumSelectedCells = sumSelectedCells;
 exports.resolveSelectionBoxToCells = resolveSelectionBoxToCells;
+exports.createSelectionPreview = createSelectionPreview;
 exports.clampSelectionRectangle = clampSelectionRectangle;
 exports.clampGridPoint = clampGridPoint;
+exports.normalizeSelectionBox = normalizeSelectionBox;
+exports.createSelectionRectangleFromBox = createSelectionRectangleFromBox;
 function normalizeSelectionRectangle(selectionRect) {
     const top = Math.min(selectionRect.start.row, selectionRect.end.row);
     const bottom = Math.max(selectionRect.start.row, selectionRect.end.row);
@@ -59,6 +62,28 @@ function resolveSelectionBoxToCells(board, selectionBox) {
     }
     return selectedCells;
 }
+function createSelectionPreview(board, selectionBox) {
+    var _a, _b;
+    if (!selectionBox) {
+        return null;
+    }
+    const normalizedBox = normalizeSelectionBox(selectionBox);
+    const rows = board.length;
+    const cols = (_b = (_a = board[0]) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0;
+    if (rows === 0 || cols === 0 || normalizedBox.width === 0 || normalizedBox.height === 0) {
+        return null;
+    }
+    const selectedCells = resolveSelectionBoxToCells(board, normalizedBox);
+    const selectionRect = createSelectionRectangleFromBox(normalizedBox, rows, cols);
+    return {
+        selectionBox: normalizedBox,
+        selectionRect,
+        selectedCells,
+        selectedCellIds: selectedCells.map((cell) => cell.id),
+        selectedCount: selectedCells.length,
+        selectedSum: sumSelectedCells(selectedCells),
+    };
+}
 function clampSelectionRectangle(selectionRect, rows, cols) {
     return {
         start: clampGridPoint(selectionRect.start, rows, cols),
@@ -86,6 +111,17 @@ function normalizeSelectionBox(selectionBox) {
         left: Math.min(left, right),
         width: Math.abs(right - left),
         height: Math.abs(bottom - top),
+    };
+}
+function createSelectionRectangleFromBox(selectionBox, rows, cols) {
+    const normalizedBox = normalizeSelectionBox(selectionBox);
+    const startCol = clampIndex(Math.floor(normalizedBox.left * cols), cols);
+    const startRow = clampIndex(Math.floor(normalizedBox.top * rows), rows);
+    const endCol = clampIndex(Math.ceil((normalizedBox.left + normalizedBox.width) * cols) - 1, cols);
+    const endRow = clampIndex(Math.ceil((normalizedBox.top + normalizedBox.height) * rows) - 1, rows);
+    return {
+        start: { row: startRow, col: startCol },
+        end: { row: endRow, col: endCol },
     };
 }
 function isCellCenterInsideSelectionBox(selectionBox, row, col, rows, cols) {

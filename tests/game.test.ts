@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applySelectionBoxToGame,
   applySelectionToGame,
   createGameState,
   createMatchConfig,
   generateBoard,
+  getSelectionPreview,
   resolveSelectionBoxToCells,
   tickGame,
   type Board,
@@ -134,6 +136,25 @@ test("freeform selection only counts fruits whose centers are inside the box", (
     bottomCenterOnly.map((cell) => cell.value),
     [7],
   );
+});
+
+test("selection preview and apply path share the same center-hit result", () => {
+  const config = createMatchConfig("selection-box", { rows: 2, cols: 1 });
+  const board = createBoard([[3], [7]]);
+  const initialState = createGameState(config, board);
+  const selectionBox = {
+    top: 0.51,
+    left: 0,
+    width: 1,
+    height: 0.49,
+  };
+
+  const preview = getSelectionPreview(initialState, selectionBox);
+  const nextState = applySelectionBoxToGame(initialState, selectionBox);
+
+  assert.deepEqual(preview?.selectedCellIds, ["cell-1-0"]);
+  assert.equal(nextState.lastMove?.selectedCellIds[0], "cell-1-0");
+  assert.equal(nextState.lastMove?.selectedSum, 7);
 });
 
 function createBoard(rows: number[][]): Board {

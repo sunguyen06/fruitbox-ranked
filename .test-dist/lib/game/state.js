@@ -5,12 +5,15 @@ exports.createNewGame = createNewGame;
 exports.tickGame = tickGame;
 exports.applySelectionToGame = applySelectionToGame;
 exports.applyResolvedSelectionToGame = applyResolvedSelectionToGame;
+exports.getSelectionPreview = getSelectionPreview;
+exports.applySelectionBoxToGame = applySelectionBoxToGame;
 exports.finishGame = finishGame;
 exports.isGameOver = isGameOver;
 exports.getElapsedMatchMs = getElapsedMatchMs;
 const board_1 = require("./board");
 const config_1 = require("./config");
 const move_1 = require("./move");
+const selection_1 = require("./selection");
 function createGameState(config, board = (0, board_1.generateBoard)(config)) {
     return {
         config,
@@ -51,6 +54,16 @@ function applyResolvedSelectionToGame(state, selectedCells, selectionRect = null
     const move = (0, move_1.createRectangleMove)(fallbackSelection, getElapsedMatchMs(state));
     const validation = (0, move_1.validateSelectedCells)(state, selectedCells, move);
     return (0, move_1.applyValidatedMove)(state, validation);
+}
+function getSelectionPreview(state, selectionBox) {
+    return (0, selection_1.createSelectionPreview)(state.board, selectionBox);
+}
+function applySelectionBoxToGame(state, selectionBox) {
+    const preview = getSelectionPreview(state, selectionBox);
+    if (!preview) {
+        return state;
+    }
+    return applyResolvedSelectionToGame(state, preview.selectedCells, preview.selectionRect);
 }
 function finishGame(state, endReason) {
     if (state.status === "ended") {

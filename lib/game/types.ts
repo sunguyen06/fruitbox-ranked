@@ -37,6 +37,15 @@ export interface NormalizedSelectionBox {
   height: number;
 }
 
+export interface SelectionPreview {
+  selectionBox: NormalizedSelectionBox;
+  selectionRect: SelectionRectangle;
+  selectedCells: FruitCell[];
+  selectedCellIds: string[];
+  selectedCount: number;
+  selectedSum: number;
+}
+
 export interface GameMove {
   type: "select-rectangle";
   selection: SelectionRectangle;

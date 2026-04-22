@@ -101,6 +101,23 @@ const game_1 = require("../lib/game");
     });
     strict_1.default.deepEqual(bottomCenterOnly.map((cell) => cell.value), [7]);
 });
+(0, node_test_1.default)("selection preview and apply path share the same center-hit result", () => {
+    var _a, _b;
+    const config = (0, game_1.createMatchConfig)("selection-box", { rows: 2, cols: 1 });
+    const board = createBoard([[3], [7]]);
+    const initialState = (0, game_1.createGameState)(config, board);
+    const selectionBox = {
+        top: 0.51,
+        left: 0,
+        width: 1,
+        height: 0.49,
+    };
+    const preview = (0, game_1.getSelectionPreview)(initialState, selectionBox);
+    const nextState = (0, game_1.applySelectionBoxToGame)(initialState, selectionBox);
+    strict_1.default.deepEqual(preview === null || preview === void 0 ? void 0 : preview.selectedCellIds, ["cell-1-0"]);
+    strict_1.default.equal((_a = nextState.lastMove) === null || _a === void 0 ? void 0 : _a.selectedCellIds[0], "cell-1-0");
+    strict_1.default.equal((_b = nextState.lastMove) === null || _b === void 0 ? void 0 : _b.selectedSum, 7);
+});
 function createBoard(rows) {
     return rows.map((row, rowIndex) => row.map((value, colIndex) => ({
         id: `cell-${rowIndex}-${colIndex}`,

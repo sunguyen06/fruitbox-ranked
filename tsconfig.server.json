@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "server/**/*.ts",
+    "lib/game/**/*.ts",
+    "lib/multiplayer/**/*.ts"
+  ]
+}

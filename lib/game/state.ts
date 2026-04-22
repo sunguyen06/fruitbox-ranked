@@ -6,11 +6,14 @@ import {
   createRectangleMove,
   validateSelectedCells,
 } from "./move";
+import { createSelectionPreview } from "./selection";
 import type {
   FruitCell,
   GameEndReason,
   GameState,
   MatchConfig,
+  NormalizedSelectionBox,
+  SelectionPreview,
   SelectionRect,
 } from "./types";
 
@@ -82,6 +85,26 @@ export function applyResolvedSelectionToGame(
   const validation = validateSelectedCells(state, selectedCells, move);
 
   return applyValidatedMove(state, validation);
+}
+
+export function getSelectionPreview(
+  state: GameState,
+  selectionBox: NormalizedSelectionBox | null,
+): SelectionPreview | null {
+  return createSelectionPreview(state.board, selectionBox);
+}
+
+export function applySelectionBoxToGame(
+  state: GameState,
+  selectionBox: NormalizedSelectionBox | null,
+): GameState {
+  const preview = getSelectionPreview(state, selectionBox);
+
+  if (!preview) {
+    return state;
+  }
+
+  return applyResolvedSelectionToGame(state, preview.selectedCells, preview.selectionRect);
 }
 
 export function finishGame(

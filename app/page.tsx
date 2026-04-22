@@ -1,4 +1,4 @@
-import { FruitboxGame } from "@/components/game/fruitbox-game";
+import { FruitboxHome } from "@/components/menu/fruitbox-home";
 import { createSessionSeed } from "@/lib/game";
 
 interface HomePageProps {
@@ -11,7 +11,7 @@ export default async function Home({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const seed = getSeedFromSearchParams(params.seed) ?? createSessionSeed();
 
-  return <FruitboxGame initialSeed={seed} />;
+  return <FruitboxHome fallbackSeed={seed} />;
 }
 
 function getSeedFromSearchParams(seed: string | string[] | undefined): string | null {

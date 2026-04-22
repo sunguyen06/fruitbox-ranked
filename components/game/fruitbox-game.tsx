@@ -8,13 +8,12 @@ import { GameHud } from "@/components/game/game-hud";
 import { GameOverPanel } from "@/components/game/game-over-panel";
 import {
   TIMER_TICK_MS,
-  applyResolvedSelectionToGame,
+  applySelectionBoxToGame,
   type GameState,
   type NormalizedSelectionBox,
   createNewGame,
   createSessionSeed,
-  resolveSelectionBoxToCells,
-  sumSelectedCells,
+  getSelectionPreview,
   tickGame,
 } from "@/lib/game";
 
@@ -44,11 +43,15 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
     : null;
 
   const previewSelectionBox: NormalizedSelectionBox | null = visualSelectionRect;
-  const previewCells = resolveSelectionBoxToCells(gameState.board, previewSelectionBox);
-  const previewSelectedIds = new Set(previewCells.map((cell) => cell.id));
-  const previewSum = sumSelectedCells(previewCells);
+  const preview = getSelectionPreview(gameState, previewSelectionBox);
+  const previewSelectedIds = new Set(preview?.selectedCellIds ?? []);
+  const previewSum = preview?.selectedSum ?? 0;
   const selectionState =
-    previewCells.length === 0 ? "idle" : previewSum === gameState.config.targetSum ? "valid" : "invalid";
+    !preview || preview.selectedCount === 0
+      ? "idle"
+      : previewSum === gameState.config.targetSum
+        ? "valid"
+        : "invalid";
 
   const advanceTimer = useEffectEvent(() => {
     setGameState((currentState) => tickGame(currentState, TIMER_TICK_MS));
@@ -153,31 +156,15 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
       width: Math.abs(relativeX - dragSelection.startX),
       height: Math.abs(relativeY - dragSelection.startY),
     };
-    const finishedSelection = getGridSelectionFromPixels(
-      {
-        startX: dragSelection.startX,
-        startY: dragSelection.startY,
-        currentX: relativeX,
-        currentY: relativeY,
-      },
-      gameState.config.rows,
-      gameState.config.cols,
-    );
-    const selectedCells = resolveSelectionBoxToCells(
-      gameState.board,
-      finishedSelectionBox,
-    );
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
     setDragSelection(null);
-    if (finishedSelection) {
+    if (finishedSelectionBox.width > 0 && finishedSelectionBox.height > 0) {
       startTransition(() => {
-        setGameState((currentState) =>
-          applyResolvedSelectionToGame(currentState, selectedCells, finishedSelection),
-        );
+        setGameState((currentState) => applySelectionBoxToGame(currentState, finishedSelectionBox));
       });
     }
   }
@@ -236,32 +223,4 @@ export function FruitboxGame({ initialSeed }: FruitboxGameProps) {
       </div>
     </main>
   );
-}
-
-function getGridSelectionFromPixels(
-  pixelSelection: DragSelection,
-  rows: number,
-  cols: number,
-): {
-  start: { row: number; col: number };
-  end: { row: number; col: number };
-} | null {
-  const left = Math.min(pixelSelection.startX, pixelSelection.currentX);
-  const right = Math.max(pixelSelection.startX, pixelSelection.currentX);
-  const top = Math.min(pixelSelection.startY, pixelSelection.currentY);
-  const bottom = Math.max(pixelSelection.startY, pixelSelection.currentY);
-
-  const startCol = clampIndex(Math.floor(left * cols), cols);
-  const startRow = clampIndex(Math.floor(top * rows), rows);
-  const endCol = clampIndex(Math.ceil(right * cols) - 1, cols);
-  const endRow = clampIndex(Math.ceil(bottom * rows) - 1, rows);
-
-  return {
-    start: { row: startRow, col: startCol },
-    end: { row: endRow, col: endCol },
-  };
-}
-
-function clampIndex(value: number, maxExclusive: number): number {
-  return Math.min(maxExclusive - 1, Math.max(0, value));
 }

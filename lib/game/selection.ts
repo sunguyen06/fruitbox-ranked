@@ -4,6 +4,7 @@ import type {
   GridPoint,
   NormalizedSelectionBox,
   NormalizedSelectionRect,
+  SelectionPreview,
   SelectionRect,
 } from "./types";
 
@@ -81,6 +82,35 @@ export function resolveSelectionBoxToCells(
   return selectedCells;
 }
 
+export function createSelectionPreview(
+  board: Board,
+  selectionBox: NormalizedSelectionBox | null,
+): SelectionPreview | null {
+  if (!selectionBox) {
+    return null;
+  }
+
+  const normalizedBox = normalizeSelectionBox(selectionBox);
+  const rows = board.length;
+  const cols = board[0]?.length ?? 0;
+
+  if (rows === 0 || cols === 0 || normalizedBox.width === 0 || normalizedBox.height === 0) {
+    return null;
+  }
+
+  const selectedCells = resolveSelectionBoxToCells(board, normalizedBox);
+  const selectionRect = createSelectionRectangleFromBox(normalizedBox, rows, cols);
+
+  return {
+    selectionBox: normalizedBox,
+    selectionRect,
+    selectedCells,
+    selectedCellIds: selectedCells.map((cell) => cell.id),
+    selectedCount: selectedCells.length,
+    selectedSum: sumSelectedCells(selectedCells),
+  };
+}
+
 export function clampSelectionRectangle(
   selectionRect: SelectionRect,
   rows: number,
@@ -106,7 +136,7 @@ function clampIndex(value: number, maxExclusive: number): number {
 export const getSelectedCells = resolveSelectionToCells;
 export const normalizeSelectionRect = normalizeSelectionRectangle;
 
-function normalizeSelectionBox(selectionBox: NormalizedSelectionBox): NormalizedSelectionBox {
+export function normalizeSelectionBox(selectionBox: NormalizedSelectionBox): NormalizedSelectionBox {
   const left = clampUnit(selectionBox.left);
   const top = clampUnit(selectionBox.top);
   const right = clampUnit(selectionBox.left + selectionBox.width);
@@ -120,6 +150,29 @@ function normalizeSelectionBox(selectionBox: NormalizedSelectionBox): Normalized
   };
 }
 
+export function createSelectionRectangleFromBox(
+  selectionBox: NormalizedSelectionBox,
+  rows: number,
+  cols: number,
+): SelectionRect {
+  const normalizedBox = normalizeSelectionBox(selectionBox);
+  const startCol = clampIndex(Math.floor(normalizedBox.left * cols), cols);
+  const startRow = clampIndex(Math.floor(normalizedBox.top * rows), rows);
+  const endCol = clampIndex(
+    Math.ceil((normalizedBox.left + normalizedBox.width) * cols) - 1,
+    cols,
+  );
+  const endRow = clampIndex(
+    Math.ceil((normalizedBox.top + normalizedBox.height) * rows) - 1,
+    rows,
+  );
+
+  return {
+    start: { row: startRow, col: startCol },
+    end: { row: endRow, col: endCol },
+  };
+}
+
 function isCellCenterInsideSelectionBox(
   selectionBox: NormalizedSelectionBox,
   row: number,
@@ -127,29 +180,16 @@ function isCellCenterInsideSelectionBox(
   rows: number,
   cols: number,
 ): boolean {
-  // Define center box as 30% of cell area (35% inset from each edge)
-  const cellLeft = col / cols;
-  const cellRight = (col + 1) / cols;
-  const cellTop = row / rows;
-  const cellBottom = (row + 1) / rows;
-
-  const cellWidth = cellRight - cellLeft;
-  const cellHeight = cellBottom - cellTop;
-
-  const centerBoxLeft = cellLeft + cellWidth * 0.35;
-  const centerBoxRight = cellLeft + cellWidth * 0.65;
-  const centerBoxTop = cellTop + cellHeight * 0.35;
-  const centerBoxBottom = cellTop + cellHeight * 0.65;
-
+  const centerX = (col + 0.5) / cols;
+  const centerY = (row + 0.5) / rows;
   const boxRight = selectionBox.left + selectionBox.width;
   const boxBottom = selectionBox.top + selectionBox.height;
 
-  // Check for overlap between center box and selection box
   return (
-    centerBoxLeft < boxRight &&
-    centerBoxRight > selectionBox.left &&
-    centerBoxTop < boxBottom &&
-    centerBoxBottom > selectionBox.top
+    centerX >= selectionBox.left &&
+    centerX <= boxRight &&
+    centerY >= selectionBox.top &&
+    centerY <= boxBottom
   );
 }
 
