@@ -174,6 +174,19 @@ io.on("connection", (socket) => {
     ack(result);
   });
 
+  socket.on("room:restart", async (request, ack) => {
+    const result = roomRegistry.restartMatch(request.roomId, socket.data.userId);
+
+    if (result.ok) {
+      await safePersist(result.room);
+      io.to(request.roomId).emit("room:updated", result.room);
+    } else {
+      socket.emit("room:error", result.error);
+    }
+
+    ack(result);
+  });
+
   socket.on("room:move", (request, ack) => {
     const result = roomRegistry.submitMove(
       request.roomId,

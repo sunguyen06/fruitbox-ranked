@@ -49,9 +49,11 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
       <PrivateMatchGame
         room={roomClient.currentRoom}
         userId={roomClient.userId}
+        isHost={roomClient.isHost}
         serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
         statusMessage={roomClient.statusMessage}
         onLeave={roomClient.leaveCurrentRoom}
+        onPlayAgain={roomClient.restartCurrentRoom}
         onSubmitSelectionBox={roomClient.submitSelectionBox}
       />
     );

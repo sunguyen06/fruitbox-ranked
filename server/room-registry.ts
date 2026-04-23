@@ -301,6 +301,44 @@ export class RoomRegistry {
     };
   }
 
+  restartMatch(roomId: RoomId, userId: UserId): RoomCommandResponse {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      return failure("room-not-found", "Room was not found.");
+    }
+
+    this.synchronizeRoom(room, Date.now());
+
+    if (room.hostUserId !== userId) {
+      return failure("not-host", "Only the host can restart this room.");
+    }
+
+    if (room.players.size < 1) {
+      return failure("room-not-ready", "At least 1 player is required to restart the room.");
+    }
+
+    if (room.status !== "finished") {
+      return failure("invalid-request", "This room can only be restarted after the match finishes.");
+    }
+
+    const nowIso = new Date().toISOString();
+
+    room.matchId = createServerId("match");
+    room.status = "waiting";
+    room.countdownEndsAt = null;
+    room.startedAt = null;
+    room.finishedAt = null;
+    room.updatedAt = nowIso;
+    room.playerGameStates = new Map();
+    room.matchConfig = createNextMatchConfig(room.matchConfig);
+
+    return {
+      ok: true,
+      room: this.toRoomSnapshot(room, Date.now()),
+    };
+  }
+
   submitMove(
     roomId: RoomId,
     userId: UserId,
@@ -448,6 +486,18 @@ function createPlayerPresence(
     joinedAt,
     socketIds: new Set([player.socketId]),
   };
+}
+
+function createNextMatchConfig(previousConfig: MatchConfig): MatchConfig {
+  return createMatchConfig(createServerId("seed"), {
+    rows: previousConfig.rows,
+    cols: previousConfig.cols,
+    durationMs: previousConfig.durationMs,
+    targetSum: previousConfig.targetSum,
+    fruitKinds: previousConfig.fruitKinds,
+    minFruitValue: previousConfig.minFruitValue,
+    maxFruitValue: previousConfig.maxFruitValue,
+  });
 }
 
 function failure(code: RealtimeError["code"], message: string): RoomCommandResponse {

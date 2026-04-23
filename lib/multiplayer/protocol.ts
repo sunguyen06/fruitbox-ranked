@@ -94,6 +94,10 @@ export interface StartRoomRequest {
   roomId: RoomId;
 }
 
+export interface RestartRoomRequest {
+  roomId: RoomId;
+}
+
 export interface SubmitMoveRequest {
   roomId: RoomId;
   selectionBox: NormalizedSelectionBox;
@@ -132,6 +136,10 @@ export interface ClientToServerEvents {
   ) => void;
   "room:start": (
     request: StartRoomRequest,
+    ack: (response: RoomCommandResponse) => void,
+  ) => void;
+  "room:restart": (
+    request: RestartRoomRequest,
     ack: (response: RoomCommandResponse) => void,
   ) => void;
   "room:move": (

@@ -24,6 +24,7 @@ export interface RoomClientState {
   joinPrivateRoom: (roomCode: string) => Promise<void>;
   leaveCurrentRoom: () => Promise<void>;
   startCurrentRoom: () => Promise<void>;
+  restartCurrentRoom: () => Promise<void>;
   submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
   clearStatus: () => void;
 }
@@ -177,6 +178,24 @@ export function useRoomClient(
     return response.ok;
   }
 
+  async function restartCurrentRoom() {
+    if (!connection.socket || !currentRoom) {
+      return;
+    }
+
+    const response = await emitRoomCommand((ack) =>
+      connection.socket!.emit(
+        "room:restart",
+        {
+          roomId: currentRoom.roomId,
+        },
+        ack,
+      ),
+    );
+
+    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
+  }
+
   function clearStatus() {
     setStatusMessage(null);
     setLastError(null);
@@ -208,6 +227,7 @@ export function useRoomClient(
     joinPrivateRoom,
     leaveCurrentRoom,
     startCurrentRoom,
+    restartCurrentRoom,
     submitSelectionBox,
     clearStatus,
   };
