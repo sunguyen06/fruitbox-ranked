@@ -27,7 +27,7 @@ export interface RoomClientState {
   joinPrivateRoom: (roomCode: string) => Promise<void>;
   leaveCurrentRoom: () => Promise<void>;
   startCurrentRoom: () => Promise<void>;
-  submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<void>;
+  submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
   clearStatus: () => void;
 }
 
@@ -160,7 +160,7 @@ export function useRoomClient(): RoomClientState {
 
   async function submitSelectionBox(selectionBox: NormalizedSelectionBox) {
     if (!connection.socket || !currentRoom) {
-      return;
+      return false;
     }
 
     const response = await emitRoomCommand((ack) =>
@@ -175,6 +175,7 @@ export function useRoomClient(): RoomClientState {
     );
 
     applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
+    return response.ok;
   }
 
   function clearStatus() {

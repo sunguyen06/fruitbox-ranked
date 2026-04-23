@@ -58,7 +58,7 @@ export class RoomRegistry {
       request.seed ?? createServerId("seed"),
       request.configOverrides,
     );
-    const playerCapacity = clampPlayerCapacity(request.playerCapacity);
+    const playerCapacity = clampPlayerCapacity();
     const hostPlayer = createPlayerPresence(host, true, createdAt);
 
     const room: ServerRoomRecord = {
@@ -398,7 +398,7 @@ function failure(code: RealtimeError["code"], message: string): RoomCommandRespo
   };
 }
 
-function clampPlayerCapacity(value: number | undefined): number {
+function clampPlayerCapacity(): number {
   return 8;
 }
 

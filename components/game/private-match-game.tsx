@@ -6,6 +6,7 @@ import type { PointerEvent } from "react";
 import { GameBoard } from "@/components/game/game-board";
 import { MenuShell } from "@/components/menu/menu-shell";
 import {
+  applySelectionBoxToGame,
   getSelectionPreview,
   synchronizeGameClock,
   type GameState,
@@ -19,7 +20,7 @@ interface PrivateMatchGameProps {
   serverTimeOffsetMs: number;
   statusMessage: string | null;
   onLeave: () => void;
-  onSubmitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<void>;
+  onSubmitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
 }
 
 interface DragSelection {
@@ -39,6 +40,8 @@ export function PrivateMatchGame({
 }: PrivateMatchGameProps) {
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   const [renderNow, setRenderNow] = useState(() => Date.now());
+  const [optimisticGameState, setOptimisticGameState] = useState<GameState | null>(null);
+  const [isSubmittingMove, setIsSubmittingMove] = useState(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -54,8 +57,31 @@ export function PrivateMatchGame({
   const myPlayer = room.playerStates.find((playerState) => playerState.sessionId === sessionId) ?? null;
   const opponentPlayer =
     room.playerStates.find((playerState) => playerState.sessionId !== sessionId) ?? null;
-  const myGameState = getLiveGameState(myPlayer, room.startedAt, authoritativeNow);
+  const myAuthoritativeGameState = getLiveGameState(myPlayer, room.startedAt, authoritativeNow);
   const opponentGameState = getLiveGameState(opponentPlayer, room.startedAt, authoritativeNow);
+  const myGameState = optimisticGameState
+    ? getLiveGameStateFromState(optimisticGameState, room.startedAt, authoritativeNow)
+    : myAuthoritativeGameState;
+
+  useEffect(() => {
+    if (!optimisticGameState) {
+      return;
+    }
+
+    if (!myAuthoritativeGameState) {
+      setOptimisticGameState(null);
+      setIsSubmittingMove(false);
+      return;
+    }
+
+    if (
+      myAuthoritativeGameState.appliedMoveCount >= optimisticGameState.appliedMoveCount ||
+      myAuthoritativeGameState.status !== "active"
+    ) {
+      setOptimisticGameState(null);
+      setIsSubmittingMove(false);
+    }
+  }, [myAuthoritativeGameState, optimisticGameState]);
 
   const visualSelectionRect = dragSelection
     ? {
@@ -84,7 +110,8 @@ export function PrivateMatchGame({
   const isInteractive =
     room.status === "active" &&
     !!myGameState &&
-    myGameState.status === "active";
+    myGameState.status === "active" &&
+    !isSubmittingMove;
   const isMatchFinished =
     room.status === "finished" ||
     (!!myGameState && !!opponentGameState && myGameState.status === "ended" && opponentGameState.status === "ended");
@@ -157,6 +184,7 @@ export function PrivateMatchGame({
               visualSelectionRect={visualSelectionRect}
               selectionState={selectionState}
               isInteractive={isInteractive}
+              showDisabledState={room.status !== "active" || myGameState.status !== "active"}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
@@ -256,7 +284,7 @@ export function PrivateMatchGame({
     setDragSelection(null);
 
     if (finishedSelectionBox.width > 0 && finishedSelectionBox.height > 0 && isInteractive) {
-      void onSubmitSelectionBox(finishedSelectionBox);
+      void submitOptimisticMove(finishedSelectionBox);
     }
   }
 
@@ -267,6 +295,43 @@ export function PrivateMatchGame({
 
     setDragSelection(null);
   }
+
+  async function submitOptimisticMove(selectionBox: NormalizedSelectionBox) {
+    if (!myGameState) {
+      return;
+    }
+
+    const optimisticNextState = applySelectionBoxToGame(myGameState, selectionBox);
+
+    if (optimisticNextState.appliedMoveCount === myGameState.appliedMoveCount) {
+      return;
+    }
+
+    setOptimisticGameState(optimisticNextState);
+    setIsSubmittingMove(true);
+
+    const wasAccepted = await onSubmitSelectionBox(selectionBox);
+
+    if (!wasAccepted) {
+      setOptimisticGameState(null);
+      setIsSubmittingMove(false);
+    }
+  }
+}
+
+function getLiveGameStateFromState(
+  gameState: GameState,
+  startedAt: string | null,
+  authoritativeNow: number,
+): GameState {
+  if (!startedAt) {
+    return gameState;
+  }
+
+  return synchronizeGameClock(
+    gameState,
+    Math.max(0, authoritativeNow - Date.parse(startedAt)),
+  );
 }
 
 function getLiveGameState(

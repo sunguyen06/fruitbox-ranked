@@ -13,6 +13,7 @@ interface GameBoardProps {
   visualSelectionRect: { top: number; left: number; width: number; height: number } | null;
   selectionState: SelectionState;
   isInteractive: boolean;
+  showDisabledState?: boolean;
   onPointerDown: PointerEventHandler<HTMLDivElement>;
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
@@ -27,6 +28,7 @@ export function GameBoard({
   visualSelectionRect,
   selectionState,
   isInteractive,
+  showDisabledState = true,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -37,7 +39,11 @@ export function GameBoard({
       <div
         className={cx(
           "relative w-full overflow-hidden rounded-lg border-4 border-yellow-600 select-none touch-none",
-          isInteractive ? "cursor-crosshair" : "cursor-not-allowed opacity-90",
+          isInteractive
+            ? "cursor-crosshair"
+            : showDisabledState
+              ? "cursor-not-allowed opacity-90"
+              : "cursor-crosshair",
         )}
         style={{
           aspectRatio: `${cols} / ${rows}`,
