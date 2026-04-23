@@ -10,6 +10,9 @@
   "include": [
     "server/**/*.ts",
     "lib/game/**/*.ts",
-    "lib/multiplayer/**/*.ts"
+    "lib/multiplayer/**/*.ts",
+    "lib/db.ts",
+    "lib/auth.ts",
+    "lib/profile.ts"
   ]
 }

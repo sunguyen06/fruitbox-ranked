@@ -32,14 +32,14 @@ export function MainMenu({
           <div className="grid gap-4">
             <ActionButton
               title="Find Ranked Match"
-              description="Battle on the same seed in the competitive ladder."
+              description="Competitive public matchmaking lands after these account foundations are in place."
               accent="apple"
               onClick={onFindRanked}
             />
 
             <ActionButton
               title="Find Casual Match"
-              description="Jump into a relaxed public match without ranked pressure."
+              description="Casual public matchmaking will plug into the same account and match-history foundation next."
               accent="gold"
               onClick={onFindCasual}
             />
@@ -47,7 +47,7 @@ export function MainMenu({
             <div className="grid gap-4 md:grid-cols-2">
               <ActionButton
                 title="Create Private Room"
-                description="Open a lobby, share the code, and start once both players are in."
+                description="Open a same-seed lobby for up to 8 players, or start solo whenever you want."
                 accent="leaf"
                 onClick={onCreatePrivateRoom}
               />

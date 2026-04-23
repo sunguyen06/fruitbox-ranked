@@ -7,22 +7,33 @@ import type {
   CreateRoomRequest,
   JoinRoomRequest,
   MatchId,
-  PlayerPresence,
   RealtimeError,
   RoomCommandResponse,
   RoomId,
   RoomPlayerStateSnapshot,
   RoomSnapshot,
   RoomStatus,
-  SessionId,
+  UserId,
 } from "../lib/multiplayer/protocol";
 
 const PRIVATE_ROOM_COUNTDOWN_MS = 5_000;
 
 interface ConnectedPlayer {
-  sessionId: SessionId;
+  userId: UserId;
   socketId: string;
   displayName: string;
+  handle: string;
+  image: string | null;
+}
+
+interface ServerPlayerRecord {
+  userId: UserId;
+  displayName: string;
+  handle: string;
+  image: string | null;
+  isHost: boolean;
+  joinedAt: string;
+  socketIds: Set<string>;
 }
 
 interface ServerRoomRecord {
@@ -39,17 +50,24 @@ interface ServerRoomRecord {
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
-  hostSessionId: SessionId;
-  players: Map<SessionId, PlayerPresence>;
-  playerGameStates: Map<SessionId, GameState>;
+  hostUserId: UserId;
+  players: Map<UserId, ServerPlayerRecord>;
+  playerGameStates: Map<UserId, GameState>;
   matchConfig: MatchConfig;
 }
 
 export class RoomRegistry {
   private readonly rooms = new Map<RoomId, ServerRoomRecord>();
   private readonly roomIdByCode = new Map<string, RoomId>();
+  private readonly roomIdByUserId = new Map<UserId, RoomId>();
 
   createRoom(request: CreateRoomRequest, host: ConnectedPlayer): RoomCommandResponse {
+    const existingRoomId = this.roomIdByUserId.get(host.userId);
+
+    if (existingRoomId) {
+      return failure("already-in-room", "You are already in a room.");
+    }
+
     const createdAt = new Date().toISOString();
     const roomId = createServerId("room");
     const roomCode = createRoomCode(this.roomIdByCode);
@@ -75,14 +93,15 @@ export class RoomRegistry {
       updatedAt: createdAt,
       startedAt: null,
       finishedAt: null,
-      hostSessionId: host.sessionId,
-      players: new Map([[host.sessionId, hostPlayer]]),
+      hostUserId: host.userId,
+      players: new Map([[host.userId, hostPlayer]]),
       playerGameStates: new Map(),
       matchConfig,
     };
 
     this.rooms.set(roomId, room);
     this.roomIdByCode.set(roomCode, roomId);
+    this.roomIdByUserId.set(host.userId, roomId);
 
     return {
       ok: true,
@@ -100,15 +119,24 @@ export class RoomRegistry {
 
     this.synchronizeRoom(room, Date.now());
 
-    const existingPlayer = room.players.get(player.sessionId);
+    const existingRoomId = this.roomIdByUserId.get(player.userId);
+
+    if (existingRoomId && existingRoomId !== room.roomId) {
+      return failure("already-in-room", "You are already in a room.");
+    }
+
+    const existingPlayer = room.players.get(player.userId);
 
     if (existingPlayer) {
-      room.players.set(player.sessionId, {
+      existingPlayer.socketIds.add(player.socketId);
+      room.players.set(player.userId, {
         ...existingPlayer,
-        socketId: player.socketId,
         displayName: player.displayName,
+        handle: player.handle,
+        image: player.image,
       });
       room.updatedAt = new Date().toISOString();
+      this.roomIdByUserId.set(player.userId, room.roomId);
 
       return {
         ok: true,
@@ -121,10 +149,11 @@ export class RoomRegistry {
     }
 
     room.players.set(
-      player.sessionId,
+      player.userId,
       createPlayerPresence(player, false, new Date().toISOString()),
     );
     room.updatedAt = new Date().toISOString();
+    this.roomIdByUserId.set(player.userId, room.roomId);
 
     return {
       ok: true,
@@ -132,7 +161,7 @@ export class RoomRegistry {
     };
   }
 
-  leaveRoom(roomId: RoomId, sessionId: SessionId): RoomCommandResponse {
+  leaveRoom(roomId: RoomId, userId: UserId): RoomCommandResponse {
     const room = this.rooms.get(roomId);
 
     if (!room) {
@@ -141,15 +170,18 @@ export class RoomRegistry {
 
     this.synchronizeRoom(room, Date.now());
 
-    if (!room.players.has(sessionId)) {
+    if (!room.players.has(userId)) {
       return failure("not-in-room", "Player is not in this room.");
     }
 
-    room.players.delete(sessionId);
-    room.playerGameStates.delete(sessionId);
+    room.players.delete(userId);
+    room.playerGameStates.delete(userId);
     room.updatedAt = new Date().toISOString();
+    this.roomIdByUserId.delete(userId);
 
     if (room.players.size === 0) {
+      room.status = "finished";
+      room.finishedAt ??= room.updatedAt;
       this.rooms.delete(roomId);
       this.roomIdByCode.delete(room.roomCode);
 
@@ -167,12 +199,12 @@ export class RoomRegistry {
       this.finishRoomForDeparture(room, Date.now());
     }
 
-    if (room.hostSessionId === sessionId) {
-      const nextHost = room.players.values().next().value as PlayerPresence | undefined;
+    if (room.hostUserId === userId) {
+      const nextHost = room.players.values().next().value as ServerPlayerRecord | undefined;
 
       if (nextHost) {
-        room.hostSessionId = nextHost.sessionId;
-        room.players.set(nextHost.sessionId, {
+        room.hostUserId = nextHost.userId;
+        room.players.set(nextHost.userId, {
           ...nextHost,
           isHost: true,
         });
@@ -185,12 +217,31 @@ export class RoomRegistry {
     };
   }
 
-  disconnectSession(sessionId: SessionId, roomId: RoomId | null): RoomSnapshot | null {
+  disconnectSession(userId: UserId, socketId: string, roomId: RoomId | null): RoomSnapshot | null {
     if (!roomId) {
       return null;
     }
 
-    const result = this.leaveRoom(roomId, sessionId);
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      return null;
+    }
+
+    const player = room.players.get(userId);
+
+    if (!player) {
+      return null;
+    }
+
+    player.socketIds.delete(socketId);
+
+    if (player.socketIds.size > 0) {
+      room.updatedAt = new Date().toISOString();
+      return this.toRoomSnapshot(room, Date.now());
+    }
+
+    const result = this.leaveRoom(roomId, userId);
 
     return result.ok ? result.room : null;
   }
@@ -208,7 +259,7 @@ export class RoomRegistry {
     };
   }
 
-  startMatch(roomId: RoomId, sessionId: SessionId): RoomCommandResponse {
+  startMatch(roomId: RoomId, userId: UserId): RoomCommandResponse {
     const room = this.rooms.get(roomId);
 
     if (!room) {
@@ -217,7 +268,7 @@ export class RoomRegistry {
 
     this.synchronizeRoom(room, Date.now());
 
-    if (room.hostSessionId !== sessionId) {
+    if (room.hostUserId !== userId) {
       return failure("not-host", "Only the host can start this room.");
     }
 
@@ -252,7 +303,7 @@ export class RoomRegistry {
 
   submitMove(
     roomId: RoomId,
-    sessionId: SessionId,
+    userId: UserId,
     selectionBox: NormalizedSelectionBox,
   ): RoomCommandResponse {
     const room = this.rooms.get(roomId);
@@ -268,7 +319,7 @@ export class RoomRegistry {
       return failure("invalid-request", "Match is not active.");
     }
 
-    const currentState = room.playerGameStates.get(sessionId);
+    const currentState = room.playerGameStates.get(userId);
 
     if (!currentState) {
       return failure("not-in-room", "Player is not in this room.");
@@ -278,7 +329,7 @@ export class RoomRegistry {
     const syncedState = synchronizeGameClock(currentState, elapsedMs);
     const nextState = applySelectionBoxToGame(syncedState, selectionBox);
 
-    room.playerGameStates.set(sessionId, nextState);
+    room.playerGameStates.set(userId, nextState);
     room.updatedAt = new Date(nowMs).toISOString();
     this.synchronizeRoom(room, nowMs);
 
@@ -306,8 +357,15 @@ export class RoomRegistry {
       updatedAt: room.updatedAt,
       startedAt: room.startedAt,
       finishedAt: room.finishedAt,
-      hostSessionId: room.hostSessionId,
-      players: [...room.players.values()],
+      hostUserId: room.hostUserId,
+      players: [...room.players.values()].map((player) => ({
+        userId: player.userId,
+        displayName: player.displayName,
+        handle: player.handle,
+        image: player.image,
+        isHost: player.isHost,
+        joinedAt: player.joinedAt,
+      })),
       playerStates: createRoomPlayerStates(room),
       matchConfig: room.matchConfig,
     };
@@ -362,11 +420,13 @@ export class RoomRegistry {
 
 function createRoomPlayerStates(room: ServerRoomRecord): RoomPlayerStateSnapshot[] {
   return [...room.players.values()].map((player) => {
-    const gameState = room.playerGameStates.get(player.sessionId) ?? null;
+    const gameState = room.playerGameStates.get(player.userId) ?? null;
 
     return {
-      sessionId: player.sessionId,
+      userId: player.userId,
       displayName: player.displayName,
+      handle: player.handle,
+      image: player.image,
       isHost: player.isHost,
       score: gameState?.score ?? 0,
       gameState,
@@ -378,13 +438,15 @@ function createPlayerPresence(
   player: ConnectedPlayer,
   isHost: boolean,
   joinedAt: string,
-): PlayerPresence {
+): ServerPlayerRecord {
   return {
-    sessionId: player.sessionId,
-    socketId: player.socketId,
+    userId: player.userId,
     displayName: player.displayName,
+    handle: player.handle,
+    image: player.image,
     isHost,
     joinedAt,
+    socketIds: new Set([player.socketId]),
   };
 }
 

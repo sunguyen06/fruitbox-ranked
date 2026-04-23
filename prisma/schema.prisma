@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MatchKind {
+  PRIVATE
+  CASUAL
+  RANKED
+}
+
+enum MatchVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum MatchStatus {
+  WAITING
+  ACTIVE
+  FINISHED
+  CANCELLED
+}
+
+enum MatchCompletionReason {
+  NORMAL
+  MANUAL_STOP
+  EMPTY_ROOM
+}
+
+model User {
+  id                String             @id
+  name              String
+  email             String
+  username          String?            @unique
+  displayUsername   String?
+  emailVerified     Boolean
+  image             String?
+  createdAt         DateTime
+  updatedAt         DateTime
+  sessions          Session[]
+  accounts          Account[]
+  profile           Profile?
+  hostedMatches     Match[]            @relation("HostedMatches")
+  matchParticipants MatchParticipant[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@unique([providerId, accountId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@unique([identifier, value])
+  @@map("verification")
+}
+
+model Profile {
+  userId       String   @id
+  displayName  String
+  handle       String   @unique
+  rankedRating Int      @default(1000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+
+model Match {
+  id                  String                @id
+  roomCode            String?
+  seed                String
+  kind                MatchKind
+  visibility          MatchVisibility
+  status              MatchStatus
+  completionReason    MatchCompletionReason?
+  hostUserId          String?
+  playerCapacity      Int
+  countdownDurationMs Int
+  participantCount    Int                   @default(0)
+  configJson          Json
+  createdAt           DateTime
+  updatedAt           DateTime
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  host                User?                 @relation("HostedMatches", fields: [hostUserId], references: [id], onDelete: SetNull)
+  participants        MatchParticipant[]
+
+  @@index([hostUserId, createdAt])
+  @@index([kind, status, createdAt])
+  @@map("match")
+}
+
+model MatchParticipant {
+  id                  String   @id
+  matchId             String
+  userId              String
+  displayNameSnapshot String
+  handleSnapshot      String?
+  joinedAt            DateTime
+  finishedAt          DateTime?
+  score               Int?
+  placement           Int?
+  wasHost             Boolean  @default(false)
+  didFinish           Boolean  @default(false)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  match               Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([userId, joinedAt])
+  @@map("match_participant")
+}

@@ -21,7 +21,7 @@ export function JoinPrivateRoomPanel({
             Join Private Room
           </h2>
           <p className="mx-auto max-w-lg text-sm text-[#f0d7bc] sm:text-base">
-            Enter the lobby code from a friend and jump straight into the same seeded match.
+            Enter a room code to join the same seeded private match and be ranked by score with everyone else in the room.
           </p>
         </div>
 

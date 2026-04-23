@@ -12,16 +12,20 @@ export interface RealtimeConnectionState {
   socketUrl: string | null;
 }
 
-export function useRealtimeConnection(): RealtimeConnectionState {
+export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionState {
   const socketUrl = getSocketServerUrl();
   const [state, setState] = useState<RealtimeConnectionState>(() => ({
-    status: socketUrl ? "connecting" : "disabled",
+    status: socketUrl && isEnabled ? "connecting" : "disabled",
     socket: null,
     session: null,
     socketUrl,
   }));
 
   useEffect(() => {
+    if (!isEnabled) {
+      return;
+    }
+
     const socket = createRealtimeSocket();
 
     if (!socket) {
@@ -44,6 +48,14 @@ export function useRealtimeConnection(): RealtimeConnectionState {
       }));
     };
 
+    const handleConnectError = () => {
+      setState((current) => ({
+        ...current,
+        status: "disconnected",
+        socket: null,
+      }));
+    };
+
     const handleSessionReady = (session: SessionReadyPayload) => {
       setState((current) => ({
         ...current,
@@ -54,6 +66,7 @@ export function useRealtimeConnection(): RealtimeConnectionState {
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
     socket.on("session:ready", handleSessionReady);
 
     socket.connect();
@@ -61,10 +74,20 @@ export function useRealtimeConnection(): RealtimeConnectionState {
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
       socket.off("session:ready", handleSessionReady);
       socket.disconnect();
     };
-  }, []);
+  }, [isEnabled, socketUrl]);
+
+  if (!isEnabled) {
+    return {
+      status: "disabled",
+      socket: null,
+      session: null,
+      socketUrl,
+    };
+  }
 
   return state;
 }

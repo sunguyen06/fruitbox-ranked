@@ -1,7 +1,7 @@
 import type { MatchConfigOverrides } from "../game/config";
 import type { GameState, MatchConfig, NormalizedSelectionBox } from "../game/types";
 
-export type SessionId = string;
+export type UserId = string;
 export type RoomId = string;
 export type MatchId = string;
 
@@ -10,16 +10,19 @@ export type MatchKind = "private" | "casual" | "ranked";
 export type RoomStatus = "waiting" | "countdown" | "active" | "finished";
 
 export interface PlayerPresence {
-  sessionId: SessionId;
-  socketId: string;
+  userId: UserId;
   displayName: string;
+  handle: string;
+  image: string | null;
   isHost: boolean;
   joinedAt: string;
 }
 
 export interface RoomPlayerStateSnapshot {
-  sessionId: SessionId;
+  userId: UserId;
   displayName: string;
+  handle: string;
+  image: string | null;
   isHost: boolean;
   score: number;
   gameState: GameState | null;
@@ -40,7 +43,7 @@ export interface RoomSnapshot {
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
-  hostSessionId: SessionId;
+  hostUserId: UserId;
   players: PlayerPresence[];
   playerStates: RoomPlayerStateSnapshot[];
   matchConfig: MatchConfig;
@@ -59,7 +62,10 @@ export interface RealtimeError {
 }
 
 export interface SessionReadyPayload {
-  sessionId: SessionId;
+  userId: UserId;
+  displayName: string;
+  handle: string;
+  image: string | null;
   connectedAt: string;
   serverVersion: string;
 }
@@ -69,13 +75,11 @@ export interface CreateRoomRequest {
   kind?: MatchKind;
   visibility?: RoomVisibility;
   playerCapacity?: number;
-  displayName?: string;
   configOverrides?: MatchConfigOverrides;
 }
 
 export interface JoinRoomRequest {
   roomCode: string;
-  displayName?: string;
 }
 
 export interface LeaveRoomRequest {
@@ -146,6 +150,9 @@ export interface ServerToClientEvents {
 export type InterServerEvents = Record<string, never>;
 
 export interface SocketData {
-  sessionId: SessionId;
+  userId: UserId;
+  displayName: string;
+  handle: string;
+  image: string | null;
   roomId: RoomId | null;
 }

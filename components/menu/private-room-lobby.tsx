@@ -43,7 +43,7 @@ export function PrivateRoomLobby({
               Private Room
             </h2>
             <p className="max-w-xl text-sm text-[#f0d7bc] sm:text-base">
-              Share this room code, wait for your opponent, and start the same-seed match together.
+              Share the code, invite up to 8 players, and start whenever the room is ready, even if you want a solo run.
             </p>
           </div>
 
@@ -116,7 +116,7 @@ export function PrivateRoomLobby({
             <div className="grid gap-3">
               {room.players.map((player, index) => (
                 <div
-                  key={player.sessionId}
+                  key={player.userId}
                   className="flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] px-4 py-4"
                 >
                   <div className="flex items-center gap-4">
@@ -126,7 +126,7 @@ export function PrivateRoomLobby({
                     <div>
                       <p className="font-semibold text-white">{player.displayName}</p>
                       <p className="text-xs uppercase tracking-[0.18em] text-[#e0b98d]">
-                        {player.sessionId.slice(0, 10)}
+                        @{player.handle}
                       </p>
                     </div>
                   </div>

@@ -1,7 +1,9 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { useSession } from "@/lib/auth-client";
 import { PrivateMatchGame } from "@/components/game/private-match-game";
 import { FruitboxRankedLogo } from "@/components/menu/fruitbox-ranked-logo";
 import { JoinPrivateRoomPanel } from "@/components/menu/join-private-room-panel";
@@ -12,25 +14,41 @@ import { useRoomClient } from "@/lib/multiplayer";
 
 interface FruitboxHomeProps {
   fallbackSeed?: string;
+  initialViewer: {
+    user: {
+      name: string;
+    };
+    profile: {
+      displayName: string;
+      handle: string;
+      rankedRating: number;
+    };
+  } | null;
 }
 
 type MenuView = "main" | "join-private";
 
-export function FruitboxHome({}: FruitboxHomeProps) {
+export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps) {
   const [view, setView] = useState<MenuView>("main");
   const [joinCode, setJoinCode] = useState("");
   const [menuMessage, setMenuMessage] = useState<string | null>(null);
-  const roomClient = useRoomClient();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !!session?.user;
+  const roomClient = useRoomClient(isAuthenticated, fallbackSeed);
+  const signInHref = buildSignInHref(pathname, searchParams);
 
   if (
     roomClient.currentRoom &&
-    roomClient.sessionId &&
+    roomClient.userId &&
     roomClient.currentRoom.status !== "waiting"
   ) {
     return (
       <PrivateMatchGame
         room={roomClient.currentRoom}
-        sessionId={roomClient.sessionId}
+        userId={roomClient.userId}
         serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
         statusMessage={roomClient.statusMessage}
         onLeave={roomClient.leaveCurrentRoom}
@@ -41,7 +59,7 @@ export function FruitboxHome({}: FruitboxHomeProps) {
 
   if (roomClient.currentRoom) {
     return (
-      <MenuShell connectionStatus={roomClient.connectionStatus}>
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
         <div className="flex flex-col items-center gap-8">
           <FruitboxRankedLogo compact />
           <PrivateRoomLobby
@@ -59,7 +77,7 @@ export function FruitboxHome({}: FruitboxHomeProps) {
 
   if (view === "join-private") {
     return (
-      <MenuShell connectionStatus={roomClient.connectionStatus}>
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
         <div className="flex flex-col items-center gap-8">
           <FruitboxRankedLogo compact />
           <JoinPrivateRoomPanel
@@ -86,24 +104,49 @@ export function FruitboxHome({}: FruitboxHomeProps) {
   }
 
   return (
-    <MenuShell connectionStatus={roomClient.connectionStatus}>
+    <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
       <div className="flex flex-col items-center gap-8">
         <FruitboxRankedLogo compact={false} />
         <MainMenu
           statusMessage={roomClient.statusMessage ?? menuMessage}
           onFindRanked={() => {
             roomClient.clearStatus();
-            setMenuMessage("Ranked matchmaking queue will be added next.");
+            setMenuMessage(
+              isAuthenticated
+                ? "Ranked matchmaking queue will be added next."
+                : "Sign in first, then public ranked matchmaking will layer on top of this account system next.",
+            );
           }}
           onFindCasual={() => {
             roomClient.clearStatus();
-            setMenuMessage("Casual matchmaking queue will be added next.");
+            setMenuMessage(
+              isAuthenticated
+                ? "Casual matchmaking queue will be added next."
+                : "Sign in first, then casual matchmaking will layer on top of this account system next.",
+            );
           }}
           onCreatePrivateRoom={() => {
             setMenuMessage(null);
+            if (isPending) {
+              return;
+            }
+            if (!isAuthenticated) {
+              roomClient.clearStatus();
+              router.push(signInHref);
+              return;
+            }
             void roomClient.createPrivateRoom();
           }}
           onJoinPrivateRoom={() => {
+            if (isPending) {
+              return;
+            }
+            if (!isAuthenticated) {
+              roomClient.clearStatus();
+              setMenuMessage(null);
+              router.push(signInHref);
+              return;
+            }
             roomClient.clearStatus();
             setMenuMessage(null);
             setJoinCode("");
@@ -113,4 +156,14 @@ export function FruitboxHome({}: FruitboxHomeProps) {
       </div>
     </MenuShell>
   );
+}
+
+function buildSignInHref(
+  pathname: string,
+  searchParams: ReturnType<typeof useSearchParams>,
+) {
+  const query = searchParams.toString();
+  const nextPath = query ? `${pathname}?${query}` : pathname;
+
+  return `/sign-in?next=${encodeURIComponent(nextPath)}`;
 }

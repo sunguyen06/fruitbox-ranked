@@ -16,7 +16,7 @@ import type { RoomPlayerStateSnapshot, RoomSnapshot } from "@/lib/multiplayer";
 
 interface PrivateMatchGameProps {
   room: RoomSnapshot;
-  sessionId: string;
+  userId: string;
   serverTimeOffsetMs: number;
   statusMessage: string | null;
   onLeave: () => void;
@@ -32,7 +32,7 @@ interface DragSelection {
 
 export function PrivateMatchGame({
   room,
-  sessionId,
+  userId,
   serverTimeOffsetMs,
   statusMessage,
   onLeave,
@@ -54,11 +54,21 @@ export function PrivateMatchGame({
   }, []);
 
   const authoritativeNow = renderNow + serverTimeOffsetMs;
-  const myPlayer = room.playerStates.find((playerState) => playerState.sessionId === sessionId) ?? null;
-  const opponentPlayer =
-    room.playerStates.find((playerState) => playerState.sessionId !== sessionId) ?? null;
+  const myPlayer = room.playerStates.find((playerState) => playerState.userId === userId) ?? null;
+  const standings = useMemo(
+    () =>
+      [...room.playerStates].sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        return left.displayName.localeCompare(right.displayName);
+      }),
+    [room.playerStates],
+  );
+  const myPlacement =
+    standings.findIndex((playerState) => playerState.userId === userId) + 1;
   const myAuthoritativeGameState = getLiveGameState(myPlayer, room.startedAt, authoritativeNow);
-  const opponentGameState = getLiveGameState(opponentPlayer, room.startedAt, authoritativeNow);
   const myGameState = optimisticGameState
     ? getLiveGameStateFromState(optimisticGameState, room.startedAt, authoritativeNow)
     : myAuthoritativeGameState;
@@ -114,11 +124,11 @@ export function PrivateMatchGame({
     !isSubmittingMove;
   const isMatchFinished =
     room.status === "finished" ||
-    (!!myGameState && !!opponentGameState && myGameState.status === "ended" && opponentGameState.status === "ended");
+    (!!myGameState && standings.every((playerState) => playerState.gameState?.status === "ended"));
 
   if (!myGameState) {
     return (
-      <MenuShell connectionStatus="connected">
+      <MenuShell connectionStatus="connected" contentClassName="max-w-[1400px]">
         <div className="mx-auto max-w-xl rounded-[2rem] border border-white/10 bg-white/6 p-8 text-center text-white/80 backdrop-blur">
           Waiting for your match state to load.
         </div>
@@ -127,9 +137,9 @@ export function PrivateMatchGame({
   }
 
   return (
-    <MenuShell connectionStatus="connected">
+    <MenuShell connectionStatus="connected" contentClassName="max-w-[1400px]">
       <div className="flex flex-col items-center gap-6">
-        <div className="w-full max-w-[1180px] rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.94))] p-5 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-6">
+        <div className="w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.94))] p-5 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-6">
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="grid flex-1 gap-3 sm:grid-cols-3">
               <ScoreCard
@@ -138,8 +148,8 @@ export function PrivateMatchGame({
                 accent="text-[#ffb347]"
               />
               <ScoreCard
-                label={opponentPlayer ? `${opponentPlayer.displayName} Score` : "Opponent Score"}
-                value={(opponentGameState?.score ?? 0).toString()}
+                label="Placement"
+                value={myPlacement > 0 ? ordinal(myPlacement) : "--"}
                 accent="text-[#7fe0a0]"
               />
               <ScoreCard
@@ -176,20 +186,60 @@ export function PrivateMatchGame({
           ) : null}
 
           <div className="relative">
-            <GameBoard
-              board={myGameState.board}
-              rows={myGameState.config.rows}
-              cols={myGameState.config.cols}
-              selectedCellIds={previewSelectedIds}
-              visualSelectionRect={visualSelectionRect}
-              selectionState={selectionState}
-              isInteractive={isInteractive}
-              showDisabledState={room.status !== "active" || myGameState.status !== "active"}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerCancel}
-            />
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0">
+                <GameBoard
+                  board={myGameState.board}
+                  rows={myGameState.config.rows}
+                  cols={myGameState.config.cols}
+                  selectedCellIds={previewSelectedIds}
+                  visualSelectionRect={visualSelectionRect}
+                  selectionState={selectionState}
+                  isInteractive={isInteractive}
+                  showDisabledState={room.status !== "active" || myGameState.status !== "active"}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
+                />
+              </div>
+
+              <aside className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4 lg:sticky lg:top-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-[#f9deb6]">
+                    Live Standings
+                  </h3>
+                  <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#f4dfca]">
+                    {standings.length} player{standings.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                <div className="grid gap-2">
+                  {standings.map((playerState, index) => (
+                    <div
+                      key={playerState.userId}
+                      className={`flex items-center justify-between rounded-[1.15rem] px-4 py-3 text-sm ${
+                        playerState.userId === userId
+                          ? "border border-[#ffb347]/30 bg-[#6a4e1f]/22 text-[#fff3df]"
+                          : "border border-white/10 bg-[#1f1713] text-[#f0d7bc]"
+                      }`}
+                    >
+                      <div>
+                        <p className="font-semibold">
+                          {ordinal(index + 1)} - {playerState.displayName}
+                        </p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-[#e0b98d]">
+                          @{playerState.handle}
+                        </p>
+                      </div>
+                      <p className="font-mono text-lg font-semibold text-white">
+                        {playerState.score}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            </div>
 
             {countdownRemainingMs > 0 ? (
               <MatchOverlay
@@ -200,8 +250,8 @@ export function PrivateMatchGame({
 
             {isMatchFinished ? (
               <MatchOverlay
-                title={resolveMatchTitle(myGameState.score, opponentGameState?.score ?? 0)}
-                subtitle={`Final score ${myGameState.score} - ${opponentGameState?.score ?? 0}`}
+                title={resolveMatchTitle(myPlacement, standings.length)}
+                subtitle={`Final score ${myGameState.score} - ${myPlacement > 0 ? `${ordinal(myPlacement)} of ${standings.length}` : "Placement pending"}`}
               />
             ) : null}
           </div>
@@ -392,16 +442,16 @@ function MatchOverlay({
   );
 }
 
-function resolveMatchTitle(myScore: number, opponentScore: number): string {
-  if (myScore > opponentScore) {
-    return "You Win";
+function resolveMatchTitle(myPlacement: number, totalPlayers: number): string {
+  if (totalPlayers <= 1) {
+    return "Run Complete";
   }
 
-  if (myScore < opponentScore) {
-    return "You Lose";
+  if (myPlacement <= 1) {
+    return "1st Place";
   }
 
-  return "Draw";
+  return `${ordinal(myPlacement)} Place`;
 }
 
 function formatTime(remainingMs: number): string {
@@ -410,4 +460,23 @@ function formatTime(remainingMs: number): string {
   const seconds = totalSeconds % 60;
 
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function ordinal(value: number): string {
+  const mod100 = value % 100;
+
+  if (mod100 >= 11 && mod100 <= 13) {
+    return `${value}th`;
+  }
+
+  switch (value % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
 }

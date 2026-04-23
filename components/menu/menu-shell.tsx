@@ -1,8 +1,21 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 
+import { AccountMenu } from "@/components/menu/account-menu";
+
 interface MenuShellProps {
-  connectionStatus: "disabled" | "connecting" | "connected" | "disconnected";
+  connectionStatus: "disabled" | "connecting" | "connected" | "disconnected" | null;
+  viewer?: {
+    user: {
+      name: string;
+    };
+    profile: {
+      displayName: string;
+      handle: string;
+      rankedRating: number;
+    };
+  } | null;
+  contentClassName?: string;
   children: ReactNode;
 }
 
@@ -22,6 +35,8 @@ const statusStyles = {
 
 export function MenuShell({
   connectionStatus,
+  viewer,
+  contentClassName,
   children,
 }: MenuShellProps) {
   return (
@@ -38,15 +53,20 @@ export function MenuShell({
             Fruitbox Portal
           </div>
 
-          <div
-            className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] backdrop-blur ${statusStyles[connectionStatus]}`}
-          >
-            {statusLabels[connectionStatus]}
+          <div className="flex items-center gap-3">
+            <AccountMenu viewer={viewer ?? null} />
+            {connectionStatus ? (
+              <div
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] backdrop-blur ${statusStyles[connectionStatus]}`}
+              >
+                {statusLabels[connectionStatus]}
+              </div>
+            ) : null}
           </div>
         </header>
 
         <div className="flex flex-1 items-center justify-center px-4 pb-14 pt-4 sm:px-8 lg:px-12">
-          <div className="w-full max-w-5xl">{children}</div>
+          <div className={`w-full ${contentClassName ?? "max-w-5xl"}`}>{children}</div>
         </div>
       </div>
     </main>

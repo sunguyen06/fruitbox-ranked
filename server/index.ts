@@ -1,10 +1,12 @@
 import { createServer } from "node:http";
 
 import { Server } from "socket.io";
+import { MatchCompletionReason, MatchStatus } from "@prisma/client";
 
 import { getServerConfig } from "./config";
+import { authenticateSocketUser } from "./auth";
+import { persistRoomSnapshot } from "./persistence";
 import { RoomRegistry } from "./room-registry";
-import { createSessionSeed } from "../lib/game/rng";
 import type {
   ClientToServerEvents,
   InterServerEvents,
@@ -41,15 +43,36 @@ const io = new Server<
   cors: {
     origin: config.corsOrigin,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
-io.on("connection", (socket) => {
-  socket.data.sessionId = createSessionSeed("session");
-  socket.data.roomId = null;
+io.use(async (socket, next) => {
+  try {
+    const user = await authenticateSocketUser(socket.handshake.headers);
 
+    if (!user) {
+      next(new Error("Authentication required."));
+      return;
+    }
+
+    socket.data.userId = user.userId;
+    socket.data.displayName = user.displayName;
+    socket.data.handle = user.handle;
+    socket.data.image = user.image;
+    socket.data.roomId = null;
+    next();
+  } catch (error) {
+    next(error instanceof Error ? error : new Error("Authentication failed."));
+  }
+});
+
+io.on("connection", (socket) => {
   socket.emit("session:ready", {
-    sessionId: socket.data.sessionId,
+    userId: socket.data.userId,
+    displayName: socket.data.displayName,
+    handle: socket.data.handle,
+    image: socket.data.image,
     connectedAt: new Date().toISOString(),
     serverVersion: "0.1.0",
   });
@@ -61,16 +84,19 @@ io.on("connection", (socket) => {
     ack?.(response);
   });
 
-  socket.on("room:create", (request, ack) => {
+  socket.on("room:create", async (request, ack) => {
     const result = roomRegistry.createRoom(request, {
-      sessionId: socket.data.sessionId,
+      userId: socket.data.userId,
       socketId: socket.id,
-      displayName: request.displayName?.trim() || "Player",
+      displayName: socket.data.displayName,
+      handle: socket.data.handle,
+      image: socket.data.image,
     });
 
     if (result.ok) {
       socket.join(result.room.roomId);
       socket.data.roomId = result.room.roomId;
+      await safePersist(result.room);
       io.to(result.room.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
@@ -79,16 +105,19 @@ io.on("connection", (socket) => {
     ack(result);
   });
 
-  socket.on("room:join", (request, ack) => {
+  socket.on("room:join", async (request, ack) => {
     const result = roomRegistry.joinRoom(request, {
-      sessionId: socket.data.sessionId,
+      userId: socket.data.userId,
       socketId: socket.id,
-      displayName: request.displayName?.trim() || "Player",
+      displayName: socket.data.displayName,
+      handle: socket.data.handle,
+      image: socket.data.image,
     });
 
     if (result.ok) {
       socket.join(result.room.roomId);
       socket.data.roomId = result.room.roomId;
+      await safePersist(result.room);
       io.to(result.room.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
@@ -97,12 +126,21 @@ io.on("connection", (socket) => {
     ack(result);
   });
 
-  socket.on("room:leave", (request, ack) => {
-    const result = roomRegistry.leaveRoom(request.roomId, socket.data.sessionId);
+  socket.on("room:leave", async (request, ack) => {
+    const result = roomRegistry.leaveRoom(request.roomId, socket.data.userId);
 
     if (result.ok) {
       socket.leave(request.roomId);
       socket.data.roomId = null;
+      await safePersist(
+        result.room,
+        result.room.players.length === 0
+          ? {
+              completionReason: MatchCompletionReason.EMPTY_ROOM,
+              forceStatus: MatchStatus.CANCELLED,
+            }
+          : undefined,
+      );
       io.to(request.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
@@ -115,13 +153,17 @@ io.on("connection", (socket) => {
     ack(roomRegistry.getRoom(request.roomId));
   });
 
-  socket.on("room:start", (request, ack) => {
-    const result = roomRegistry.startMatch(request.roomId, socket.data.sessionId);
+  socket.on("room:start", async (request, ack) => {
+    const result = roomRegistry.startMatch(request.roomId, socket.data.userId);
 
     if (result.ok) {
+      await safePersist(result.room);
       io.to(request.roomId).emit("room:updated", result.room);
       scheduleRoomRefresh(request.roomId, result.room.countdownDurationMs + 50);
-      scheduleRoomRefresh(request.roomId, result.room.countdownDurationMs + result.room.matchConfig.durationMs + 100);
+      scheduleRoomRefresh(
+        request.roomId,
+        result.room.countdownDurationMs + result.room.matchConfig.durationMs + 100,
+      );
     } else {
       socket.emit("room:error", result.error);
     }
@@ -132,7 +174,7 @@ io.on("connection", (socket) => {
   socket.on("room:move", (request, ack) => {
     const result = roomRegistry.submitMove(
       request.roomId,
-      socket.data.sessionId,
+      socket.data.userId,
       request.selectionBox,
     );
 
@@ -145,10 +187,19 @@ io.on("connection", (socket) => {
     ack(result);
   });
 
-  socket.on("disconnect", () => {
-    const room = roomRegistry.disconnectSession(socket.data.sessionId, socket.data.roomId);
+  socket.on("disconnect", async () => {
+    const room = roomRegistry.disconnectSession(socket.data.userId, socket.id, socket.data.roomId);
 
     if (room) {
+      await safePersist(
+        room,
+        room.players.length === 0
+          ? {
+              completionReason: MatchCompletionReason.EMPTY_ROOM,
+              forceStatus: MatchStatus.CANCELLED,
+            }
+          : undefined,
+      );
       io.to(room.roomId).emit("room:updated", room);
     }
   });
@@ -162,10 +213,29 @@ httpServer.listen(config.port, () => {
 
 function scheduleRoomRefresh(roomId: string, delayMs: number) {
   setTimeout(() => {
-    const result = roomRegistry.getRoom(roomId);
-
-    if (result.ok) {
-      io.to(roomId).emit("room:updated", result.room);
-    }
+    void refreshRoom(roomId);
   }, Math.max(0, delayMs));
+}
+
+async function refreshRoom(roomId: string) {
+  const result = roomRegistry.getRoom(roomId);
+
+  if (result.ok) {
+    await safePersist(result.room);
+    io.to(roomId).emit("room:updated", result.room);
+  }
+}
+
+async function safePersist(
+  room: import("../lib/multiplayer").RoomSnapshot,
+  options?: {
+    completionReason?: MatchCompletionReason;
+    forceStatus?: MatchStatus;
+  },
+) {
+  try {
+    await persistRoomSnapshot(room, options);
+  } catch (error) {
+    console.error("[fruitbox-realtime] failed to persist room snapshot", error);
+  }
 }

@@ -1,27 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { NormalizedSelectionBox } from "../game";
 import { useRealtimeConnection } from "./use-realtime-connection";
 import type {
   RealtimeError,
   RoomCommandResponse,
-  RoomPlayerStateSnapshot,
   RoomSnapshot,
 } from "./protocol";
 
 export interface RoomClientState {
   connectionStatus: "disabled" | "connecting" | "connected" | "disconnected";
-  sessionId: string | null;
+  userId: string | null;
   currentRoom: RoomSnapshot | null;
   lastError: RealtimeError | null;
   statusMessage: string | null;
   serverTimeOffsetMs: number;
   isReady: boolean;
   isHost: boolean;
-  myPlayerState: RoomPlayerStateSnapshot | null;
-  opponentPlayerState: RoomPlayerStateSnapshot | null;
   canStartCurrentRoom: boolean;
   createPrivateRoom: () => Promise<void>;
   joinPrivateRoom: (roomCode: string) => Promise<void>;
@@ -31,8 +28,11 @@ export interface RoomClientState {
   clearStatus: () => void;
 }
 
-export function useRoomClient(): RoomClientState {
-  const connection = useRealtimeConnection();
+export function useRoomClient(
+  isAuthenticated: boolean,
+  fallbackSeed?: string,
+): RoomClientState {
+  const connection = useRealtimeConnection(isAuthenticated);
   const [currentRoom, setCurrentRoom] = useState<RoomSnapshot | null>(null);
   const [lastError, setLastError] = useState<RealtimeError | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -77,8 +77,8 @@ export function useRoomClient(): RoomClientState {
         {
           kind: "private",
           visibility: "private",
-          playerCapacity: 2,
-          displayName: "Player",
+          playerCapacity: 8,
+          seed: fallbackSeed,
         },
         ack,
       ),
@@ -105,7 +105,6 @@ export function useRoomClient(): RoomClientState {
         "room:join",
         {
           roomCode: normalizedCode,
-          displayName: "Player",
         },
         ack,
       ),
@@ -183,42 +182,27 @@ export function useRoomClient(): RoomClientState {
     setLastError(null);
   }
 
-  const sessionId = connection.session?.sessionId ?? null;
+  const userId = connection.session?.userId ?? null;
   const isHost =
-    !!sessionId &&
+    !!userId &&
     !!currentRoom &&
-    currentRoom.hostSessionId === sessionId;
+    currentRoom.hostUserId === userId;
   const canStartCurrentRoom =
     !!currentRoom &&
     currentRoom.status === "waiting" &&
     currentRoom.players.length >= 1 &&
     isHost;
-  const myPlayerState = useMemo(
-    () =>
-      sessionId && currentRoom
-        ? currentRoom.playerStates.find((playerState) => playerState.sessionId === sessionId) ?? null
-        : null,
-    [currentRoom, sessionId],
-  );
-  const opponentPlayerState = useMemo(
-    () =>
-      sessionId && currentRoom
-        ? currentRoom.playerStates.find((playerState) => playerState.sessionId !== sessionId) ?? null
-        : null,
-    [currentRoom, sessionId],
-  );
+  const hasReadySession = connection.status === "connected" && !!connection.session;
 
   return {
     connectionStatus: connection.status,
-    sessionId,
-    currentRoom,
-    lastError,
-    statusMessage,
-    serverTimeOffsetMs,
-    isReady: connection.status === "connected" && !!connection.session,
+    userId,
+    currentRoom: isAuthenticated ? currentRoom : null,
+    lastError: isAuthenticated ? lastError : null,
+    statusMessage: isAuthenticated ? statusMessage : null,
+    serverTimeOffsetMs: isAuthenticated ? serverTimeOffsetMs : 0,
+    isReady: hasReadySession,
     isHost,
-    myPlayerState,
-    opponentPlayerState,
     canStartCurrentRoom,
     createPrivateRoom,
     joinPrivateRoom,

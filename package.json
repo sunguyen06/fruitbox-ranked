@@ -9,15 +9,21 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
     "test": "tsc -p tsconfig.test.json && node .test-dist/tests/game.test.js",
     "typecheck:server": "tsc -p tsconfig.server.json"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "^1.6.7",
+    "@prisma/client": "^6.19.3",
+    "better-auth": "^1.6.7",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -26,6 +32,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"

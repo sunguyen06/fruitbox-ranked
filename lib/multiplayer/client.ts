@@ -25,6 +25,7 @@ export function createRealtimeSocket(): RealtimeSocket | null {
   return io(url, {
     autoConnect: false,
     transports: ["websocket"],
+    withCredentials: true,
     reconnection: true,
     reconnectionAttempts: 5,
     timeout: 5_000,
