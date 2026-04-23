@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import { createRealtimeSocket, getSocketServerUrl, type RealtimeSocket } from "./client";
+import {
+  createRealtimeSocket,
+  fetchRealtimeSessionToken,
+  getSocketServerUrl,
+  type RealtimeSocket,
+} from "./client";
 import type { SessionReadyPayload } from "./protocol";
 
 export interface RealtimeConnectionState {
@@ -27,16 +32,19 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
     }
 
     const socket = createRealtimeSocket();
+    let isCancelled = false;
 
     if (!socket) {
       return;
     }
 
+    const realtimeSocket = socket;
+
     const handleConnect = () => {
       setState((current) => ({
         ...current,
         status: "connected",
-        socket,
+        socket: realtimeSocket,
       }));
     };
 
@@ -60,24 +68,47 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
       setState((current) => ({
         ...current,
         session,
-        socket,
+        socket: realtimeSocket,
       }));
     };
 
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-    socket.on("connect_error", handleConnectError);
-    socket.on("session:ready", handleSessionReady);
-
-    socket.connect();
+    realtimeSocket.on("connect", handleConnect);
+    realtimeSocket.on("disconnect", handleDisconnect);
+    realtimeSocket.on("connect_error", handleConnectError);
+    realtimeSocket.on("session:ready", handleSessionReady);
+    void connectSocket();
 
     return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-      socket.off("connect_error", handleConnectError);
-      socket.off("session:ready", handleSessionReady);
-      socket.disconnect();
+      isCancelled = true;
+      realtimeSocket.off("connect", handleConnect);
+      realtimeSocket.off("disconnect", handleDisconnect);
+      realtimeSocket.off("connect_error", handleConnectError);
+      realtimeSocket.off("session:ready", handleSessionReady);
+      realtimeSocket.disconnect();
     };
+
+    async function connectSocket() {
+      const sessionToken = await fetchRealtimeSessionToken().catch(() => null);
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (!sessionToken) {
+        setState((current) => ({
+          ...current,
+          status: "disconnected",
+          socket: null,
+          session: null,
+        }));
+        return;
+      }
+
+      realtimeSocket.auth = {
+        sessionToken,
+      };
+      realtimeSocket.connect();
+    }
   }, [isEnabled, socketUrl]);
 
   if (!isEnabled) {

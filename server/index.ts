@@ -49,7 +49,10 @@ const io = new Server<
 
 io.use(async (socket, next) => {
   try {
-    const user = await authenticateSocketUser(socket.handshake.headers);
+    const user = await authenticateSocketUser(
+      socket.handshake.headers,
+      socket.handshake.auth.sessionToken,
+    );
 
     if (!user) {
       next(new Error("Authentication required."));
