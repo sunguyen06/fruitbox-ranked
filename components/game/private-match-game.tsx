@@ -12,7 +12,8 @@ import {
   type GameState,
   type NormalizedSelectionBox,
 } from "@/lib/game";
-import type { RoomPlayerStateSnapshot, RoomSnapshot } from "@/lib/multiplayer";
+import { useSoundEffectsVolume, ensureSharedAudioContext, unlockSoundEffects } from "@/lib/sound-effects";
+import type { QueueKind, RoomPlayerStateSnapshot, RoomSnapshot } from "@/lib/multiplayer";
 
 interface PrivateMatchGameProps {
   room: RoomSnapshot;
@@ -22,6 +23,8 @@ interface PrivateMatchGameProps {
   statusMessage: string | null;
   onLeave: () => void;
   onPlayAgain: () => void;
+  onQueueAgain: (kind: QueueKind) => Promise<void>;
+  onBackToHome: () => Promise<void>;
   onSubmitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
 }
 
@@ -40,12 +43,15 @@ export function PrivateMatchGame({
   statusMessage,
   onLeave,
   onPlayAgain,
+  onQueueAgain,
+  onBackToHome,
   onSubmitSelectionBox,
 }: PrivateMatchGameProps) {
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   const [renderNow, setRenderNow] = useState(() => Date.now());
   const [optimisticGameState, setOptimisticGameState] = useState<GameState | null>(null);
   const [isSubmittingMove, setIsSubmittingMove] = useState(false);
+  const { volume: soundEffectsVolume } = useSoundEffectsVolume();
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -131,45 +137,21 @@ export function PrivateMatchGame({
   const isMatchFinished =
     room.status === "finished" ||
     (!!myGameState && standings.every((playerState) => playerState.gameState?.status === "ended"));
-  const countdownAudioContextRef = useRef<AudioContext | null>(null);
   const boxOfTenSoundRef = useRef<HTMLAudioElement | null>(null);
   const lastMatchIdRef = useRef(room.matchId);
   const lastCountdownSecondRef = useRef<number | null>(null);
   const lastPlayedMoveCountRef = useRef(myGameState?.appliedMoveCount ?? 0);
+  const lastGameStatusRef = useRef(myGameState?.status ?? null);
   const appliedMoveCount = myGameState?.appliedMoveCount ?? 0;
   const lastMoveWasValid = myGameState?.lastMove?.isValid ?? false;
   const lastMoveSelectedSum = myGameState?.lastMove?.selectedSum ?? null;
 
-  function ensureCountdownAudioContext() {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    const AudioContextConstructor = getAudioContextConstructor(window);
-
-    if (!AudioContextConstructor) {
-      return null;
-    }
-
-    if (!countdownAudioContextRef.current) {
-      countdownAudioContextRef.current = new AudioContextConstructor();
-    }
-
-    return countdownAudioContextRef.current;
-  }
-
-  function unlockMatchAudio() {
-    const audioContext = ensureCountdownAudioContext();
-
-    if (audioContext?.state === "suspended") {
-      void audioContext.resume().catch(() => {
-        // Browser autoplay policies may still block until a trusted interaction occurs.
-      });
-    }
-  }
-
   const playCountdownTone = useEffectEvent((secondsRemaining: number) => {
-    const audioContext = ensureCountdownAudioContext();
+    if (soundEffectsVolume <= 0) {
+      return;
+    }
+
+    const audioContext = ensureSharedAudioContext();
 
     if (!audioContext) {
       return;
@@ -185,12 +167,13 @@ export function PrivateMatchGame({
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     const durationSeconds = secondsRemaining <= 1 ? 0.34 : 0.24;
+    const peakGain = (secondsRemaining <= 1 ? 0.18 : 0.12) * soundEffectsVolume;
 
     oscillator.type = secondsRemaining <= 1 ? "triangle" : "sine";
     oscillator.frequency.setValueAtTime(380 + (6 - Math.min(secondsRemaining, 5)) * 80, now);
 
     gainNode.gain.setValueAtTime(0.0001, now);
-    gainNode.gain.exponentialRampToValueAtTime(secondsRemaining <= 1 ? 0.18 : 0.12, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(peakGain, now + 0.02);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + durationSeconds);
 
     oscillator.connect(gainNode);
@@ -199,13 +182,50 @@ export function PrivateMatchGame({
     oscillator.stop(now + durationSeconds);
   });
 
-  const playBoxOfTenSound = useEffectEvent(() => {
-    const sound = boxOfTenSoundRef.current;
-
-    if (!sound) {
+  const playTimerEndSound = useEffectEvent(() => {
+    if (soundEffectsVolume <= 0) {
       return;
     }
 
+    const audioContext = ensureSharedAudioContext();
+
+    if (!audioContext) {
+      return;
+    }
+
+    if (audioContext.state === "suspended") {
+      void audioContext.resume().catch(() => {
+        // Ignore resume failures and let later user gestures unlock audio.
+      });
+    }
+
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+    oscillator.frequency.exponentialRampToValueAtTime(220, now + 0.5);
+
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.2 * soundEffectsVolume, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.56);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.58);
+  });
+
+  const playBoxOfTenSound = useEffectEvent(() => {
+    const sound = boxOfTenSoundRef.current;
+
+    if (!sound || soundEffectsVolume <= 0) {
+      return;
+    }
+
+    sound.volume = soundEffectsVolume;
     sound.currentTime = 0;
     void sound.play().catch(() => {
       // Missing files or autoplay blocks should not break gameplay.
@@ -220,15 +240,14 @@ export function PrivateMatchGame({
     return () => {
       boxOfTenSound.pause();
       boxOfTenSoundRef.current = null;
-
-      if (countdownAudioContextRef.current) {
-        void countdownAudioContextRef.current.close().catch(() => {
-          // Ignore teardown failures.
-        });
-        countdownAudioContextRef.current = null;
-      }
     };
   }, []);
+
+  useEffect(() => {
+    if (boxOfTenSoundRef.current) {
+      boxOfTenSoundRef.current.volume = soundEffectsVolume;
+    }
+  }, [soundEffectsVolume]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -236,13 +255,7 @@ export function PrivateMatchGame({
     }
 
     const handleUnlock = () => {
-      const audioContext = ensureCountdownAudioContext();
-
-      if (audioContext?.state === "suspended") {
-        void audioContext.resume().catch(() => {
-          // Browser autoplay policies may still block until a trusted interaction occurs.
-        });
-      }
+      unlockSoundEffects();
     };
 
     window.addEventListener("pointerdown", handleUnlock, { passive: true });
@@ -262,7 +275,8 @@ export function PrivateMatchGame({
     lastMatchIdRef.current = room.matchId;
     lastCountdownSecondRef.current = countdownSecondsRemaining;
     lastPlayedMoveCountRef.current = appliedMoveCount;
-  }, [appliedMoveCount, countdownSecondsRemaining, room.matchId]);
+    lastGameStatusRef.current = myGameState?.status ?? null;
+  }, [appliedMoveCount, countdownSecondsRemaining, myGameState?.status, room.matchId]);
 
   useEffect(() => {
     if (countdownSecondsRemaining === null) {
@@ -289,6 +303,20 @@ export function PrivateMatchGame({
       playBoxOfTenSound();
     }
   }, [appliedMoveCount, lastMoveSelectedSum, lastMoveWasValid]);
+
+  useEffect(() => {
+    const currentStatus = myGameState?.status ?? null;
+
+    if (
+      lastGameStatusRef.current !== currentStatus &&
+      currentStatus === "ended" &&
+      myGameState?.result?.endReason === "time-expired"
+    ) {
+      playTimerEndSound();
+    }
+
+    lastGameStatusRef.current = currentStatus;
+  }, [myGameState?.result?.endReason, myGameState?.status]);
 
   if (!myGameState) {
     return (
@@ -406,26 +434,55 @@ export function PrivateMatchGame({
             </div>
 
             {countdownSecondsRemaining !== null ? (
-              <CountdownOverlay secondsRemaining={countdownSecondsRemaining} />
+              <CountdownOverlay
+                label={getMatchLabel(room.kind)}
+                secondsRemaining={countdownSecondsRemaining}
+              />
             ) : null}
 
             {isMatchFinished ? (
               <MatchOverlay
-                title={resolveMatchTitle(myPlacement, standings.length)}
-                subtitle={`Final score ${myGameState.score} - ${myPlacement > 0 ? `${ordinal(myPlacement)} of ${standings.length}` : "Placement pending"}`}
+                label={getMatchLabel(room.kind)}
+                title={room.kind === "private" ? resolveMatchTitle(myPlacement, standings.length) : "Run Complete"}
+                subtitle={
+                  room.kind === "private"
+                    ? `Final score ${myGameState.score} - ${myPlacement > 0 ? `${ordinal(myPlacement)} of ${standings.length}` : "Placement pending"}`
+                    : `${myPlacement > 0 ? `${ordinal(myPlacement)} of ${standings.length}` : "Placement pending"} - Final score ${myGameState.score}`
+                }
               >
-                {isHost ? (
-                  <button
-                    type="button"
-                    onClick={onPlayAgain}
-                    className="rounded-[1.2rem] bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] transition hover:brightness-110"
-                  >
-                    Play Again
-                  </button>
+                {room.kind === "private" ? (
+                  isHost ? (
+                    <button
+                      type="button"
+                      onClick={onPlayAgain}
+                      className="rounded-[1.2rem] bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] transition hover:brightness-110"
+                    >
+                      Play Again
+                    </button>
+                  ) : (
+                    <p className="text-sm text-[#f9deb6]">
+                      Waiting for the host to start another round.
+                    </p>
+                  )
                 ) : (
-                  <p className="text-sm text-[#f9deb6]">
-                    Waiting for the host to start another round.
-                  </p>
+                  <div className="flex flex-col items-center gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void onQueueAgain(room.kind === "ranked" ? "ranked" : "casual")
+                      }
+                      className="rounded-[1.2rem] bg-[linear-gradient(135deg,#ff8f3f,#ffb347)] px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_18px_45px_rgba(255,143,63,0.3)] transition hover:brightness-110"
+                    >
+                      Queue Again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onBackToHome()}
+                      className="rounded-[1.2rem] border border-white/12 bg-white/6 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-[#fff0de] transition hover:bg-white/10"
+                    >
+                      Back To Home
+                    </button>
+                  </div>
                 )}
               </MatchOverlay>
             ) : null}
@@ -440,7 +497,7 @@ export function PrivateMatchGame({
       return;
     }
 
-    unlockMatchAudio();
+    unlockSoundEffects();
 
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width === 0 || bounds.height === 0) {
@@ -599,12 +656,18 @@ function ScoreCard({
   );
 }
 
-function CountdownOverlay({ secondsRemaining }: { secondsRemaining: number }) {
+function CountdownOverlay({
+  label,
+  secondsRemaining,
+}: {
+  label: string;
+  secondsRemaining: number;
+}) {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#16100ccc]/70 p-6 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-[2.2rem] border border-[#ffd28f]/18 bg-[linear-gradient(180deg,rgba(55,33,20,0.98),rgba(30,21,15,0.98))] p-8 text-center shadow-[0_24px_80px_rgba(5,15,12,0.4)]">
         <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#f9deb6]">
-          Private Match
+          {label}
         </p>
         <div className="mt-6 flex justify-center">
           <div className="flex h-40 w-40 animate-pulse items-center justify-center rounded-full border border-[#ffd28f]/28 bg-[radial-gradient(circle,rgba(255,179,71,0.22),rgba(255,179,71,0.04))] shadow-[0_0_0_10px_rgba(255,179,71,0.08)] sm:h-48 sm:w-48">
@@ -625,10 +688,12 @@ function CountdownOverlay({ secondsRemaining }: { secondsRemaining: number }) {
 }
 
 function MatchOverlay({
+  label,
   title,
   subtitle,
   children,
 }: {
+  label: string;
   title: string;
   subtitle: string;
   children?: ReactNode;
@@ -637,7 +702,7 @@ function MatchOverlay({
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#16100ccc]/62 p-6 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.96),rgba(30,21,15,0.98))] p-8 text-center shadow-[0_24px_80px_rgba(5,15,12,0.35)]">
         <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#f9deb6]">
-          Fruitbox Ranked
+          {label}
         </p>
         <h2 className="mt-4 text-4xl font-black tracking-[-0.04em] text-white">{title}</h2>
         <p className="mt-4 text-base text-[#f0d7bc]">{subtitle}</p>
@@ -645,17 +710,6 @@ function MatchOverlay({
       </div>
     </div>
   );
-}
-
-interface AudioContextWindow extends Window {
-  AudioContext?: typeof AudioContext;
-  webkitAudioContext?: typeof AudioContext;
-}
-
-function getAudioContextConstructor(
-  audioWindow: AudioContextWindow,
-): typeof AudioContext | null {
-  return audioWindow.AudioContext ?? audioWindow.webkitAudioContext ?? null;
 }
 
 function resolveMatchTitle(myPlacement: number, totalPlayers: number): string {
@@ -668,6 +722,17 @@ function resolveMatchTitle(myPlacement: number, totalPlayers: number): string {
   }
 
   return `${ordinal(myPlacement)} Place`;
+}
+
+function getMatchLabel(kind: RoomSnapshot["kind"]) {
+  switch (kind) {
+    case "ranked":
+      return "Ranked Match";
+    case "casual":
+      return "Casual Match";
+    default:
+      return "Private Match";
+  }
 }
 
 function formatTime(remainingMs: number): string {

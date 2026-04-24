@@ -6,6 +6,7 @@ import { MatchCompletionReason, MatchStatus } from "@prisma/client";
 import { getServerConfig } from "./config";
 import { authenticateSocketUser } from "./auth";
 import { MatchmakingService } from "./matchmaking";
+import { maybeApplyRoomRatings, type AppliedRoomRating } from "./match-ratings";
 import { persistRoomSnapshot } from "./persistence";
 import { RoomRegistry } from "./room-registry";
 import type {
@@ -381,7 +382,33 @@ async function safePersist(
 ) {
   try {
     await persistRoomSnapshot(room, options);
+    const appliedRatings =
+      options?.forceStatus === MatchStatus.CANCELLED ? null : await maybeApplyRoomRatings(room);
+
+    if (appliedRatings?.length) {
+      syncConnectedPlayerRatings(appliedRatings);
+    }
   } catch (error) {
     console.error("[fruitbox-realtime] failed to persist room snapshot", error);
+  }
+}
+
+function syncConnectedPlayerRatings(appliedRatings: AppliedRoomRating[]) {
+  const ratingsByUserId = new Map(
+    appliedRatings.map((rating) => [rating.userId, rating] as const),
+  );
+
+  for (const liveSocket of io.sockets.sockets.values()) {
+    const rating = ratingsByUserId.get(liveSocket.data.userId);
+
+    if (!rating) {
+      continue;
+    }
+
+    if (rating.kind === "ranked") {
+      liveSocket.data.rankedElo = rating.nextRating;
+    } else {
+      liveSocket.data.casualMmr = rating.nextRating;
+    }
   }
 }

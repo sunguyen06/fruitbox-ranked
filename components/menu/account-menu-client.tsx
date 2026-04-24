@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/lib/auth-client";
 import type { MatchHistoryEntry } from "@/lib/profile";
 import { getRankTier } from "@/lib/ranks";
+import { useSoundEffectsVolume } from "@/lib/sound-effects";
 
 interface AccountMenuClientProps {
   viewer: {
@@ -30,6 +31,7 @@ export function AccountMenuClient({ viewer }: AccountMenuClientProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isOpen = openPathname === pathname;
   const rankTier = viewer ? getRankTier(viewer.profile.rankedElo) : null;
+  const { volume, setVolume } = useSoundEffectsVolume();
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -121,6 +123,28 @@ export function AccountMenuClient({ viewer }: AccountMenuClientProps) {
           </div>
 
           <CompactProfileForm profile={viewer.profile} />
+
+          <div className="mt-3 rounded-[1.1rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-[#f0d7bc]">
+            <div className="flex items-center justify-between gap-4">
+              <span>Sound Effects</span>
+              <span className="font-mono text-white">{Math.round(volume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={Math.round(volume * 100)}
+              onChange={(event) => {
+                setVolume(Number(event.target.value) / 100);
+              }}
+              className="mt-3 h-2 w-full cursor-pointer accent-[#ffb347]"
+              aria-label="Sound effects volume"
+            />
+            <p className="mt-2 text-xs text-[#e0b98d]">
+              Controls countdown, combo, and timer-end sounds.
+            </p>
+          </div>
 
           <button
             type="button"

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 import { useSession } from "@/lib/auth-client";
 import { PrivateMatchGame } from "@/components/game/private-match-game";
@@ -11,7 +11,8 @@ import { MainMenu } from "@/components/menu/main-menu";
 import { MenuShell } from "@/components/menu/menu-shell";
 import { PrivateRoomLobby } from "@/components/menu/private-room-lobby";
 import { PublicMatchmakingPanel } from "@/components/menu/public-matchmaking-panel";
-import { useRoomClient } from "@/lib/multiplayer";
+import { useRoomClient, type QueueKind } from "@/lib/multiplayer";
+import { unlockSoundEffects } from "@/lib/sound-effects";
 
 interface FruitboxHomeProps {
   fallbackSeed?: string;
@@ -71,6 +72,22 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
   const roomClient = useRoomClient(isAuthenticated, fallbackSeed);
   const signInHref = buildSignInHref(pathname, searchParams);
 
+  async function handleQueueAgain(kind: QueueKind) {
+    unlockSoundEffects();
+    await roomClient.leaveCurrentRoom();
+    await roomClient.joinMatchmakingQueue(kind);
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  async function handleBackToHome() {
+    await roomClient.leaveCurrentRoom();
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
   if (
     roomClient.currentRoom &&
     roomClient.userId &&
@@ -85,6 +102,8 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
         statusMessage={roomClient.statusMessage}
         onLeave={roomClient.leaveCurrentRoom}
         onPlayAgain={roomClient.restartCurrentRoom}
+        onQueueAgain={handleQueueAgain}
+        onBackToHome={handleBackToHome}
         onSubmitSelectionBox={roomClient.submitSelectionBox}
       />
     );
@@ -144,6 +163,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
             }}
             onJoin={() => {
               setMenuMessage(null);
+              unlockSoundEffects();
               void roomClient.joinPrivateRoom(joinCode);
             }}
           />
@@ -168,6 +188,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
               router.push(signInHref);
               return;
             }
+            unlockSoundEffects();
             void roomClient.joinMatchmakingQueue("ranked");
           }}
           onFindCasual={() => {
@@ -180,6 +201,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
               router.push(signInHref);
               return;
             }
+            unlockSoundEffects();
             void roomClient.joinMatchmakingQueue("casual");
           }}
           onCreatePrivateRoom={() => {
@@ -192,6 +214,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
               router.push(signInHref);
               return;
             }
+            unlockSoundEffects();
             void roomClient.createPrivateRoom();
           }}
           onJoinPrivateRoom={() => {
