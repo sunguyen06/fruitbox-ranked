@@ -647,12 +647,13 @@ function MatchOverlay({
   );
 }
 
-interface WindowWithWebkitAudioContext extends Window {
+interface AudioContextWindow extends Window {
+  AudioContext?: typeof AudioContext;
   webkitAudioContext?: typeof AudioContext;
 }
 
 function getAudioContextConstructor(
-  audioWindow: WindowWithWebkitAudioContext,
+  audioWindow: AudioContextWindow,
 ): typeof AudioContext | null {
   return audioWindow.AudioContext ?? audioWindow.webkitAudioContext ?? null;
 }
