@@ -10,6 +10,7 @@ import { JoinPrivateRoomPanel } from "@/components/menu/join-private-room-panel"
 import { MainMenu } from "@/components/menu/main-menu";
 import { MenuShell } from "@/components/menu/menu-shell";
 import { PrivateRoomLobby } from "@/components/menu/private-room-lobby";
+import { PublicMatchmakingPanel } from "@/components/menu/public-matchmaking-panel";
 import { useRoomClient } from "@/lib/multiplayer";
 
 interface FruitboxHomeProps {
@@ -21,8 +22,38 @@ interface FruitboxHomeProps {
     profile: {
       displayName: string;
       handle: string;
-      rankedRating: number;
+      rankedElo: number;
     };
+    matchHistory: Array<{
+      id: string;
+      joinedAt: string;
+      score: number | null;
+      placement: number | null;
+      didFinish: boolean;
+      wasHost: boolean;
+      displayNameSnapshot: string;
+      handleSnapshot: string | null;
+      match: {
+        id: string;
+        roomCode: string | null;
+        seed: string;
+        kind: string;
+        visibility: string;
+        status: string;
+        completionReason: string | null;
+        participantCount: number;
+        createdAt: string;
+        startedAt: string | null;
+        finishedAt: string | null;
+        participants: Array<{
+          userId: string;
+          displayNameSnapshot: string;
+          handleSnapshot: string | null;
+          score: number | null;
+          placement: number | null;
+        }>;
+      };
+    }>;
   } | null;
 }
 
@@ -49,13 +80,29 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
       <PrivateMatchGame
         room={roomClient.currentRoom}
         userId={roomClient.userId}
-        isHost={roomClient.isHost}
+        isHost={roomClient.isHost && roomClient.currentRoom.kind === "private"}
         serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
         statusMessage={roomClient.statusMessage}
         onLeave={roomClient.leaveCurrentRoom}
         onPlayAgain={roomClient.restartCurrentRoom}
         onSubmitSelectionBox={roomClient.submitSelectionBox}
       />
+    );
+  }
+
+  if (roomClient.currentQueue && initialViewer) {
+    return (
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
+        <div className="flex flex-col items-center gap-8">
+          <FruitboxRankedLogo compact />
+          <PublicMatchmakingPanel
+            queue={roomClient.currentQueue}
+            rankedElo={initialViewer.profile.rankedElo}
+            statusMessage={roomClient.statusMessage}
+            onCancel={roomClient.leaveCurrentQueue}
+          />
+        </div>
+      </MenuShell>
     );
   }
 
@@ -112,20 +159,28 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
         <MainMenu
           statusMessage={roomClient.statusMessage ?? menuMessage}
           onFindRanked={() => {
-            roomClient.clearStatus();
-            setMenuMessage(
-              isAuthenticated
-                ? "Ranked matchmaking queue will be added next."
-                : "Sign in first, then public ranked matchmaking will layer on top of this account system next.",
-            );
+            setMenuMessage(null);
+            if (isPending) {
+              return;
+            }
+            if (!isAuthenticated) {
+              roomClient.clearStatus();
+              router.push(signInHref);
+              return;
+            }
+            void roomClient.joinMatchmakingQueue("ranked");
           }}
           onFindCasual={() => {
-            roomClient.clearStatus();
-            setMenuMessage(
-              isAuthenticated
-                ? "Casual matchmaking queue will be added next."
-                : "Sign in first, then casual matchmaking will layer on top of this account system next.",
-            );
+            setMenuMessage(null);
+            if (isPending) {
+              return;
+            }
+            if (!isAuthenticated) {
+              roomClient.clearStatus();
+              router.push(signInHref);
+              return;
+            }
+            void roomClient.joinMatchmakingQueue("casual");
           }}
           onCreatePrivateRoom={() => {
             setMenuMessage(null);

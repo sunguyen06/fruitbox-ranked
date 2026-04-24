@@ -17,8 +17,40 @@ export interface ProfileIdentity {
   image: string | null;
   displayName: string;
   handle: string;
-  rankedRating: number;
+  rankedElo: number;
+  casualMmr: number;
   createdAt: string;
+}
+
+export interface MatchHistoryEntry {
+  id: string;
+  joinedAt: string;
+  score: number | null;
+  placement: number | null;
+  didFinish: boolean;
+  wasHost: boolean;
+  displayNameSnapshot: string;
+  handleSnapshot: string | null;
+  match: {
+    id: string;
+    roomCode: string | null;
+    seed: string;
+    kind: string;
+    visibility: string;
+    status: string;
+    completionReason: string | null;
+    participantCount: number;
+    createdAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    participants: Array<{
+      userId: string;
+      displayNameSnapshot: string;
+      handleSnapshot: string | null;
+      score: number | null;
+      placement: number | null;
+    }>;
+  };
 }
 
 export async function ensureProfileIdentity(input: ProfileIdentityInput): Promise<ProfileIdentity> {
@@ -33,7 +65,8 @@ export async function ensureProfileIdentity(input: ProfileIdentityInput): Promis
       image: input.image,
       displayName: existing.displayName,
       handle: existing.handle,
-      rankedRating: existing.rankedRating,
+      rankedElo: existing.rankedElo,
+      casualMmr: existing.casualMmr,
       createdAt: existing.createdAt.toISOString(),
     };
   }
@@ -54,12 +87,13 @@ export async function ensureProfileIdentity(input: ProfileIdentityInput): Promis
     image: input.image,
     displayName: created.displayName,
     handle: created.handle,
-    rankedRating: created.rankedRating,
+    rankedElo: created.rankedElo,
+    casualMmr: created.casualMmr,
     createdAt: created.createdAt.toISOString(),
   };
 }
 
-export async function getMatchHistoryForUser(userId: string) {
+export async function getMatchHistoryForUser(userId: string): Promise<MatchHistoryEntry[]> {
   const rows = await prisma.matchParticipant.findMany({
     where: { userId },
     include: {

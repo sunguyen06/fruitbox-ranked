@@ -4,6 +4,7 @@ import type { GameState, MatchConfig, NormalizedSelectionBox } from "../game/typ
 export type UserId = string;
 export type RoomId = string;
 export type MatchId = string;
+export type QueueKind = "casual" | "ranked";
 
 export type RoomVisibility = "private" | "public";
 export type MatchKind = "private" | "casual" | "ranked";
@@ -49,6 +50,11 @@ export interface RoomSnapshot {
   matchConfig: MatchConfig;
 }
 
+export interface MatchmakingQueueSnapshot {
+  kind: QueueKind;
+  queuedAt: string;
+}
+
 export interface RealtimeError {
   code:
     | "room-not-found"
@@ -56,6 +62,7 @@ export interface RealtimeError {
     | "already-in-room"
     | "invalid-request"
     | "not-in-room"
+    | "not-in-queue"
     | "not-host"
     | "room-not-ready";
   message: string;
@@ -98,6 +105,14 @@ export interface RestartRoomRequest {
   roomId: RoomId;
 }
 
+export interface JoinQueueRequest {
+  kind: QueueKind;
+}
+
+export interface LeaveQueueRequest {
+  kind?: QueueKind;
+}
+
 export interface SubmitMoveRequest {
   roomId: RoomId;
   selectionBox: NormalizedSelectionBox;
@@ -107,6 +122,16 @@ export type RoomCommandResponse =
   | {
       ok: true;
       room: RoomSnapshot;
+    }
+  | {
+      ok: false;
+      error: RealtimeError;
+    };
+
+export type QueueCommandResponse =
+  | {
+      ok: true;
+      queue: MatchmakingQueueSnapshot | null;
     }
   | {
       ok: false;
@@ -142,6 +167,14 @@ export interface ClientToServerEvents {
     request: RestartRoomRequest,
     ack: (response: RoomCommandResponse) => void,
   ) => void;
+  "queue:join": (
+    request: JoinQueueRequest,
+    ack: (response: QueueCommandResponse) => void,
+  ) => void;
+  "queue:leave": (
+    request: LeaveQueueRequest,
+    ack: (response: QueueCommandResponse) => void,
+  ) => void;
   "room:move": (
     request: SubmitMoveRequest,
     ack: (response: RoomCommandResponse) => void,
@@ -151,6 +184,7 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   "session:ready": (payload: SessionReadyPayload) => void;
   "server:pong": (payload: { receivedAt: string }) => void;
+  "queue:updated": (queue: MatchmakingQueueSnapshot | null) => void;
   "room:updated": (room: RoomSnapshot) => void;
   "room:error": (error: RealtimeError) => void;
 }
@@ -162,5 +196,8 @@ export interface SocketData {
   displayName: string;
   handle: string;
   image: string | null;
+  rankedElo: number;
+  casualMmr: number;
+  queueKind: QueueKind | null;
   roomId: RoomId | null;
 }

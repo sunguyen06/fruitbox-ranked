@@ -102,7 +102,8 @@ model Profile {
   userId       String   @id
   displayName  String
   handle       String   @unique
-  rankedRating Int      @default(1000)
+  rankedElo    Int      @default(1000)
+  casualMmr    Int      @default(1000)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

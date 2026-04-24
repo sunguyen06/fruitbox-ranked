@@ -25,8 +25,9 @@ export default async function Home({ searchParams }: HomePageProps) {
               profile: {
                 displayName: viewer.profile.displayName,
                 handle: viewer.profile.handle,
-                rankedRating: viewer.profile.rankedRating,
+                rankedElo: viewer.profile.rankedElo,
               },
+              matchHistory: viewer.matchHistory,
             }
           : null
       }

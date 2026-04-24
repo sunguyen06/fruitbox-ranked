@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { ensureProfileIdentity } from "@/lib/profile";
+import { ensureProfileIdentity, getMatchHistoryForUser } from "@/lib/profile";
 
 export const getOptionalViewer = cache(async () => {
   const session = await auth.api.getSession({
@@ -23,6 +23,7 @@ export const getOptionalViewer = cache(async () => {
     name: session.user.name,
     image: session.user.image ?? null,
   });
+  const matchHistory = await getMatchHistoryForUser(session.user.id);
 
   return {
     session: {
@@ -37,6 +38,7 @@ export const getOptionalViewer = cache(async () => {
       emailVerified: session.user.emailVerified,
     },
     profile,
+    matchHistory,
   };
 });
 

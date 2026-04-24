@@ -12,8 +12,38 @@ interface MenuShellProps {
     profile: {
       displayName: string;
       handle: string;
-      rankedRating: number;
+      rankedElo: number;
     };
+    matchHistory: Array<{
+      id: string;
+      joinedAt: string;
+      score: number | null;
+      placement: number | null;
+      didFinish: boolean;
+      wasHost: boolean;
+      displayNameSnapshot: string;
+      handleSnapshot: string | null;
+      match: {
+        id: string;
+        roomCode: string | null;
+        seed: string;
+        kind: string;
+        visibility: string;
+        status: string;
+        completionReason: string | null;
+        participantCount: number;
+        createdAt: string;
+        startedAt: string | null;
+        finishedAt: string | null;
+        participants: Array<{
+          userId: string;
+          displayNameSnapshot: string;
+          handleSnapshot: string | null;
+          score: number | null;
+          placement: number | null;
+        }>;
+      };
+    }>;
   } | null;
   contentClassName?: string;
   children: ReactNode;

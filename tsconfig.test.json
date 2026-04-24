@@ -11,6 +11,7 @@
   },
   "include": [
     "lib/game/**/*.ts",
+    "lib/ranks.ts",
     "tests/**/*.ts"
   ]
 }

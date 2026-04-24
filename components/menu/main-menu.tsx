@@ -32,14 +32,14 @@ export function MainMenu({
           <div className="grid gap-4">
             <ActionButton
               title="Find Ranked Match"
-              description="Competitive public matchmaking lands after these account foundations are in place."
+              description="Queue into a public competitive match using your current Elo tier."
               accent="apple"
               onClick={onFindRanked}
             />
 
             <ActionButton
               title="Find Casual Match"
-              description="Casual public matchmaking will plug into the same account and match-history foundation next."
+              description="Queue into a public match using a separate hidden MMR, without touching your visible rank."
               accent="gold"
               onClick={onFindCasual}
             />

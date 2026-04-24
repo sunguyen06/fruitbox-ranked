@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "tsc -p tsconfig.test.json && node .test-dist/tests/game.test.js",
+    "test": "tsc -p tsconfig.test.json && node .test-dist/tests/all-tests.js",
     "typecheck:server": "tsc -p tsconfig.server.json"
   },
   "dependencies": {

@@ -18,7 +18,7 @@ import type {
 
 const PRIVATE_ROOM_COUNTDOWN_MS = 5_000;
 
-interface ConnectedPlayer {
+export interface ConnectedPlayer {
   userId: UserId;
   socketId: string;
   displayName: string;
@@ -257,6 +257,63 @@ export class RoomRegistry {
       ok: true,
       room: this.toRoomSnapshot(room, Date.now()),
     };
+  }
+
+  hasRoomForUser(userId: UserId): boolean {
+    return this.roomIdByUserId.has(userId);
+  }
+
+  createMatchmadeRoom(
+    players: ConnectedPlayer[],
+    kind: Extract<RoomSnapshot["kind"], "casual" | "ranked">,
+  ): RoomCommandResponse {
+    if (players.length < 2) {
+      return failure("room-not-ready", "At least 2 players are required to start matchmaking.");
+    }
+
+    const occupiedPlayer = players.find((player) => this.roomIdByUserId.has(player.userId));
+
+    if (occupiedPlayer) {
+      return failure("already-in-room", "One of the matched players is already in a room.");
+    }
+
+    const createdAt = new Date().toISOString();
+    const roomId = createServerId("room");
+    const roomCode = createRoomCode(this.roomIdByCode);
+    const hostPlayer = players[0]!;
+    const room: ServerRoomRecord = {
+      roomId,
+      roomCode,
+      matchId: createServerId("match"),
+      kind,
+      visibility: "public",
+      status: "waiting",
+      playerCapacity: players.length,
+      countdownDurationMs: PRIVATE_ROOM_COUNTDOWN_MS,
+      countdownEndsAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      startedAt: null,
+      finishedAt: null,
+      hostUserId: hostPlayer.userId,
+      players: new Map(
+        players.map((player, index) => [
+          player.userId,
+          createPlayerPresence(player, index === 0, createdAt),
+        ]),
+      ),
+      playerGameStates: new Map(),
+      matchConfig: createMatchConfig(createServerId("seed")),
+    };
+
+    this.rooms.set(roomId, room);
+    this.roomIdByCode.set(roomCode, roomId);
+
+    for (const player of players) {
+      this.roomIdByUserId.set(player.userId, roomId);
+    }
+
+    return this.startMatch(roomId, hostPlayer.userId);
   }
 
   startMatch(roomId: RoomId, userId: UserId): RoomCommandResponse {

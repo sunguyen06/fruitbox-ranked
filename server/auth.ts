@@ -9,6 +9,8 @@ export interface AuthenticatedSocketUser {
   displayName: string;
   handle: string;
   image: string | null;
+  rankedElo: number;
+  casualMmr: number;
 }
 
 export async function authenticateSocketUser(
@@ -36,6 +38,8 @@ export async function authenticateSocketUser(
     displayName: profile.displayName,
     handle: profile.handle,
     image: user.image ?? null,
+    rankedElo: profile.rankedElo,
+    casualMmr: profile.casualMmr,
   };
 }
 
