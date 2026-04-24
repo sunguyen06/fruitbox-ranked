@@ -1,25 +1,30 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 
-import { auth } from "@/lib/auth";
-
 export async function GET() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  try {
+    const { auth } = await import("@/lib/auth");
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-  if (!session) {
-    return NextResponse.json({ sessionToken: null }, { status: 401 });
-  }
+    if (!session) {
+      return NextResponse.json({ sessionToken: null }, { status: 401 });
+    }
 
-  return NextResponse.json(
-    {
-      sessionToken: session.session.token,
-    },
-    {
-      headers: {
-        "cache-control": "no-store",
+    return NextResponse.json(
+      {
+        sessionToken: session.session.token,
       },
-    },
-  );
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("[realtime-auth] failed to resolve session token", error);
+
+    return NextResponse.json({ sessionToken: null }, { status: 503 });
+  }
 }
