@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { RenderWakeBridge } from "@/components/render-wake-bridge";
 
 export const metadata: Metadata = {
   title: "Fruitbox Ranked",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="min-h-full">
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <RenderWakeBridge />
+        {children}
+      </body>
     </html>
   );
 }

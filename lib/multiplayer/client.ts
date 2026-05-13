@@ -12,6 +12,17 @@ export interface RealtimeSocketAuthPayload {
   sessionToken?: string;
 }
 
+export async function wakeRealtimeService(): Promise<void> {
+  try {
+    await fetch("/api/render-wake", {
+      method: "POST",
+      keepalive: true,
+    });
+  } catch {
+    // Ignore wake-up failures. Socket.io reconnects will continue to try.
+  }
+}
+
 export function getSocketServerUrl(): string | null {
   const value = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
 

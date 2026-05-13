@@ -7,6 +7,7 @@ import {
   fetchRealtimeSessionToken,
   getSocketServerUrl,
   type RealtimeSocket,
+  wakeRealtimeService,
 } from "./client";
 import type { SessionReadyPayload } from "./protocol";
 
@@ -88,6 +89,12 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
     };
 
     async function connectSocket() {
+      await wakeRealtimeService();
+
+      if (isCancelled) {
+        return;
+      }
+
       const sessionToken = await fetchRealtimeSessionToken().catch(() => null);
 
       if (isCancelled) {
