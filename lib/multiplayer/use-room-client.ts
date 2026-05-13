@@ -14,7 +14,7 @@ import type {
 } from "./protocol";
 
 export interface RoomClientState {
-  connectionStatus: "disabled" | "connecting" | "connected" | "disconnected";
+  connectionStatus: "disabled" | "waking" | "connecting" | "connected" | "disconnected";
   userId: string | null;
   currentRoom: RoomSnapshot | null;
   currentQueue: MatchmakingQueueSnapshot | null;

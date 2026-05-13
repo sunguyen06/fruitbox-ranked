@@ -12,15 +12,62 @@ export interface RealtimeSocketAuthPayload {
   sessionToken?: string;
 }
 
-export async function wakeRealtimeService(): Promise<void> {
+export interface RenderWakeResponse {
+  configured: boolean;
+  ok: boolean;
+  targetUrl: string | null;
+  status: number | null;
+}
+
+const DEFAULT_WAKE_TIMEOUT_MS = 45_000;
+const DEFAULT_WAKE_INTERVAL_MS = 2_500;
+
+export async function wakeRealtimeService(): Promise<RenderWakeResponse> {
   try {
-    await fetch("/api/render-wake", {
+    const response = await fetch("/api/render-wake", {
       method: "POST",
       keepalive: true,
     });
+
+    if (!response.ok) {
+      return {
+        configured: false,
+        ok: false,
+        targetUrl: null,
+        status: response.status,
+      };
+    }
+
+    return (await response.json()) as RenderWakeResponse;
   } catch {
-    // Ignore wake-up failures. Socket.io reconnects will continue to try.
+    return {
+      configured: false,
+      ok: false,
+      targetUrl: null,
+      status: null,
+    };
   }
+}
+
+export async function waitForRealtimeServiceToWake(options?: {
+  timeoutMs?: number;
+  intervalMs?: number;
+}): Promise<boolean> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_WAKE_TIMEOUT_MS;
+  const intervalMs = options?.intervalMs ?? DEFAULT_WAKE_INTERVAL_MS;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const result = await wakeRealtimeService();
+
+    if (result.ok || !result.configured) {
+      return true;
+    }
+
+    await delay(intervalMs);
+  }
+
+  return false;
 }
 
 export function getSocketServerUrl(): string | null {
@@ -42,7 +89,9 @@ export function createRealtimeSocket(): RealtimeSocket | null {
     transports: ["websocket"],
     withCredentials: true,
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 20,
+    reconnectionDelay: 2_000,
+    reconnectionDelayMax: 8_000,
     timeout: 5_000,
   });
 }
@@ -61,4 +110,10 @@ export async function fetchRealtimeSessionToken(): Promise<string | null> {
   };
 
   return payload.sessionToken ?? null;
+}
+
+function delay(durationMs: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }

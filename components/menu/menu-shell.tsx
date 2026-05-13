@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 import { AccountMenu } from "@/components/menu/account-menu";
 
 interface MenuShellProps {
-  connectionStatus: "disabled" | "connecting" | "connected" | "disconnected" | null;
+  connectionStatus:
+    | "disabled"
+    | "waking"
+    | "connecting"
+    | "connected"
+    | "disconnected"
+    | null;
   viewer?: {
     user: {
       name: string;
@@ -51,6 +57,7 @@ interface MenuShellProps {
 
 const statusLabels = {
   disabled: "Offline",
+  waking: "Waking Server",
   connecting: "Connecting",
   connected: "Online",
   disconnected: "Disconnected",
@@ -58,6 +65,7 @@ const statusLabels = {
 
 const statusStyles = {
   disabled: "border-white/12 bg-white/[0.07] text-[#e2cfb5]",
+  waking: "border-[#ffcf66]/36 bg-[#7b4d15]/24 text-[#ffe7b7]",
   connecting: "border-[#ffb347]/30 bg-[#8e4f1f]/18 text-[#ffe1b2]",
   connected: "border-[#6fd68b]/28 bg-[#1d5a31]/20 text-[#c7f4d1]",
   disconnected: "border-[#ff9870]/28 bg-[#5a2a2a]/18 text-[#ffd1c0]",

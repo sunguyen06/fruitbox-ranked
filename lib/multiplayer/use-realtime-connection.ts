@@ -7,12 +7,12 @@ import {
   fetchRealtimeSessionToken,
   getSocketServerUrl,
   type RealtimeSocket,
-  wakeRealtimeService,
+  waitForRealtimeServiceToWake,
 } from "./client";
 import type { SessionReadyPayload } from "./protocol";
 
 export interface RealtimeConnectionState {
-  status: "disabled" | "connecting" | "connected" | "disconnected";
+  status: "disabled" | "waking" | "connecting" | "connected" | "disconnected";
   socket: RealtimeSocket | null;
   session: SessionReadyPayload | null;
   socketUrl: string | null;
@@ -21,7 +21,7 @@ export interface RealtimeConnectionState {
 export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionState {
   const socketUrl = getSocketServerUrl();
   const [state, setState] = useState<RealtimeConnectionState>(() => ({
-    status: socketUrl && isEnabled ? "connecting" : "disabled",
+    status: socketUrl && isEnabled ? "waking" : "disabled",
     socket: null,
     session: null,
     socketUrl,
@@ -60,7 +60,7 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
     const handleConnectError = () => {
       setState((current) => ({
         ...current,
-        status: "disconnected",
+        status: "connecting",
         socket: null,
       }));
     };
@@ -89,9 +89,25 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
     };
 
     async function connectSocket() {
-      await wakeRealtimeService();
+      setState((current) => ({
+        ...current,
+        status: "waking",
+        socket: null,
+      }));
+
+      const didWake = await waitForRealtimeServiceToWake();
 
       if (isCancelled) {
+        return;
+      }
+
+      if (!didWake) {
+        setState((current) => ({
+          ...current,
+          status: "disconnected",
+          socket: null,
+          session: null,
+        }));
         return;
       }
 
@@ -100,6 +116,12 @@ export function useRealtimeConnection(isEnabled: boolean): RealtimeConnectionSta
       if (isCancelled) {
         return;
       }
+
+      setState((current) => ({
+        ...current,
+        status: "connecting",
+        socket: null,
+      }));
 
       if (!sessionToken) {
         setState((current) => ({
