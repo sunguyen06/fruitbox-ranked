@@ -30,7 +30,7 @@ Featuring secure authentication, persistent match history, and a sophisticated r
 * **Private Game Rooms** for custom sessions with friends
 * **User Authentication & Profiles** with match history and statistics
 * **Interactive Game Board** with real-time state synchronization
-* **Secure Backend** with Next.js API routes and full TypeScript type safety
+* **Authenticated HTTP and Socket.IO APIs** with shared TypeScript event contracts
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -40,7 +40,7 @@ Featuring secure authentication, persistent match history, and a sophisticated r
 
 ## Built With
 
-This project combines modern full-stack technologies with scalable real-time architecture:
+The web and realtime services use:
 
 ![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge\&logo=nextdotjs\&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge\&logo=react\&logoColor=black)
@@ -57,60 +57,31 @@ This project combines modern full-stack technologies with scalable real-time arc
 
 ---
 
-## Getting Started
+## Offline Interview Demo
 
-Follow these steps to run Fruitbox Ranked locally:
+Use Node.js 22 LTS and run `npm ci` once while online if dependencies are missing. From this checkout, run:
 
-### Prerequisites
+```powershell
+npm run demo:offline
+```
 
-* Node.js (v18 or higher)
-* PostgreSQL database
-* npm or yarn
+Wait for Next.js to report `Ready` and for `fruitbox-realtime` to report that it is listening. Open [http://127.0.0.1:3400](http://127.0.0.1:3400) in a regular window and in a separate private window or browser profile. Both services bind to loopback, on ports `3400` and `3401`. Use that exact URL so the browser origin and auth configuration match. Press Ctrl+C in the terminal to stop both services.
 
-### Installation
+The launcher builds a copy of the app with a dedicated Prisma SQLite client and stores data in the ignored `.offline-demo/prisma/demo.sqlite` file. The demo uses the same game engine, Socket.IO handlers, Better Auth flows, and rating calculations. Accounts and match history carry over between demo runs. Rehearse with throwaway local accounts and create two fresh accounts if you want to show a match starting at 1,000 Elo each. Assets, audio, and fonts are local. The Render wake endpoint targets the local Socket.IO health check during the demo.
 
-1. **Clone the repository**
+### Interview run of show
 
-   ```bash
-   git clone https://github.com/yourusername/fruitbox-ranked.git
-   cd fruitbox-ranked
-   ```
+1. Sign in with two local accounts. Open [the orchard seed](http://127.0.0.1:3400/?seed=orchard) in the host window and wait for **Online** in both windows. Choose **Create Private Room** on the host and **Join Private Room** on the other player. Enter the six-character code and show the `2/8` lobby count.
+2. Start from the host window. Compare the opening boards after the five-second countdown. Drag over the first two apples in the top row (`4 + 6`) and point to the two-point update in the other window's standings.
+3. Leave the private room from both windows. Choose **Find Ranked Match** in each. The first player waits, then the second enters and both receive the countdown. Score on one account and let the two-minute timer finish with different scores.
+4. Select **Back To Home** in each window. Open the account menu and **Match History** to show the saved result. On fresh equal-rated accounts, a decisive match moves the winner to 1,016 and the loser to 984 Elo.
+5. Choose **Find Casual Match** in both windows to show the separate queue. A completed casual win between equal-rated accounts moves hidden MMR by 12 points per player while visible Elo stays at its previous value.
 
-2. **Install dependencies**
+For a short interview slot, run the private-room segment first and have a completed ranked match in the demo accounts' history. The [architecture walkthrough](docs/architecture.md) maps each step to the code and explains the design tradeoffs.
 
-   ```bash
-   npm install
-   ```
+## PostgreSQL-backed development
 
-3. **Set up environment variables**
-
-   Create a `.env.local` file in the project root:
-
-   ```
-   DATABASE_URL=postgresql://user:password@localhost:5432/fruitbox
-   NEXT_PUBLIC_GAME_SERVER_URL=http://localhost:3001
-   ```
-
-4. **Set up the database**
-
-   ```bash
-   npm run prisma:generate
-   npm run prisma:migrate
-   ```
-
-5. **Run the application**
-
-   Start the frontend development server:
-   ```bash
-   npm run dev
-   ```
-
-   In another terminal, start the real-time game server:
-   ```bash
-   npm run server:dev
-   ```
-
-   Open [http://localhost:3000](http://localhost:3000) to play.
+Use Node.js 22 LTS and PostgreSQL. Run `npm ci`, copy `.env.example` to `.env`, and set `DATABASE_URL` and a unique `BETTER_AUTH_SECRET`. Run `npm run prisma:generate` and `npm run prisma:migrate` against the intended development database. Start `npm run dev` in one terminal and `node --env-file=.env --import tsx server/index.ts` in another, then open [http://localhost:3000](http://localhost:3000). The standalone Socket.IO process needs its environment loaded explicitly when developing from `.env`. A hosted process can use `npm run server:start` with variables supplied by its deployment environment.
 
 ### Available Commands
 
@@ -120,6 +91,7 @@ npm run server:dev      # Start game server with live reload
 npm run server:start    # Start production game server
 npm run build           # Build for production
 npm run start           # Start production server
+npm run demo:offline    # Build and start the loopback-only interview demo
 npm run lint            # Run ESLint
 npm run test            # Run test suite
 npm run typecheck:server # Type-check server code
@@ -177,7 +149,7 @@ tests/                 # Test suite
 - **Separation of Concerns**: Frontend (Next.js) and backend (Node.js) run as separate services
 - **Type Safety**: Full TypeScript coverage across frontend and backend
 - **Real-time Sync**: Socket.io protocols define strict message contracts for game state
-- **Scalability**: Room registry allows horizontal scaling of game servers
+- **Process-local live state**: The room registry and queues live in one Socket.IO process. Multiple replicas would need explicit room ownership and queue coordination.
 - **Database-First Design**: Prisma ORM with PostgreSQL for reliable data persistence
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

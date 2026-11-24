@@ -54,6 +54,7 @@ interface ServerRoomRecord {
   players: Map<UserId, ServerPlayerRecord>;
   playerGameStates: Map<UserId, GameState>;
   matchConfig: MatchConfig;
+  finishedMatch?: RoomSnapshot;
 }
 
 export class RoomRegistry {
@@ -142,6 +143,10 @@ export class RoomRegistry {
         ok: true,
         room: this.toRoomSnapshot(room, Date.now()),
       };
+    }
+
+    if (room.status !== "waiting") {
+      return failure("room-not-ready", "This room has already started.");
     }
 
     if (room.players.size >= room.playerCapacity) {
@@ -257,6 +262,19 @@ export class RoomRegistry {
       ok: true,
       room: this.toRoomSnapshot(room, Date.now()),
     };
+  }
+
+  getFinishedMatch(roomId: RoomId): RoomSnapshot | null {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+
+    if (!room.finishedMatch) {
+      const snapshot = this.toRoomSnapshot(room, Date.now());
+      if (snapshot.status !== "finished") return null;
+      room.finishedMatch = snapshot;
+    }
+
+    return room.finishedMatch;
   }
 
   hasRoomForUser(userId: UserId): boolean {
@@ -388,6 +406,7 @@ export class RoomRegistry {
     room.finishedAt = null;
     room.updatedAt = nowIso;
     room.playerGameStates = new Map();
+    room.finishedMatch = undefined;
     room.matchConfig = createNextMatchConfig(room.matchConfig);
 
     return {
@@ -461,7 +480,7 @@ export class RoomRegistry {
         isHost: player.isHost,
         joinedAt: player.joinedAt,
       })),
-      playerStates: createRoomPlayerStates(room),
+      playerStates: room.finishedMatch?.playerStates ?? createRoomPlayerStates(room),
       matchConfig: room.matchConfig,
     };
   }

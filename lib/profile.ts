@@ -58,39 +58,38 @@ export async function ensureProfileIdentity(input: ProfileIdentityInput): Promis
     where: { userId: input.userId },
   });
 
-  if (existing) {
-    return {
-      userId: input.userId,
-      email: input.email,
-      image: input.image,
-      displayName: existing.displayName,
-      handle: existing.handle,
-      rankedElo: existing.rankedElo,
-      casualMmr: existing.casualMmr,
-      createdAt: existing.createdAt.toISOString(),
-    };
-  }
-
-  const fallbackDisplayName = normalizeDisplayName(input.name, input.email);
-  const handle = await buildUniqueHandle(fallbackDisplayName, input.email);
-  const created = await prisma.profile.create({
-    data: {
-      userId: input.userId,
-      displayName: fallbackDisplayName,
-      handle,
-    },
-  });
+  const profile = existing ?? await createProfileIdentity(input);
 
   return {
     userId: input.userId,
     email: input.email,
     image: input.image,
-    displayName: created.displayName,
-    handle: created.handle,
-    rankedElo: created.rankedElo,
-    casualMmr: created.casualMmr,
-    createdAt: created.createdAt.toISOString(),
+    displayName: profile.displayName,
+    handle: profile.handle,
+    rankedElo: profile.rankedElo,
+    casualMmr: profile.casualMmr,
+    createdAt: profile.createdAt.toISOString(),
   };
+}
+
+async function createProfileIdentity(input: ProfileIdentityInput) {
+  const displayName = normalizeDisplayName(input.name, input.email);
+
+  for (let attempt = 0; ; attempt += 1) {
+    const handle = await buildUniqueHandle(displayName, input.email);
+    try {
+      // The web and realtime services can initialize the same profile concurrently.
+      return await prisma.profile.upsert({
+        where: { userId: input.userId },
+        create: { userId: input.userId, displayName, handle },
+        update: { userId: input.userId },
+      });
+    } catch (error) {
+      const uniquenessConflict = isUniqueConstraintError(error, "handle") ||
+        isUniqueConstraintError(error, "userId");
+      if (attempt >= 2 || !uniquenessConflict) throw error;
+    }
+  }
 }
 
 export async function getMatchHistoryForUser(userId: string): Promise<MatchHistoryEntry[]> {

@@ -8,6 +8,7 @@
     "server:start": "tsx server/index.ts",
     "build": "next build",
     "start": "next start",
+    "demo:offline": "node scripts/offline-demo.mjs",
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

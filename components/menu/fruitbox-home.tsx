@@ -81,8 +81,13 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
     });
   }
 
-  async function handleBackToHome() {
+  async function handleLeaveRoom() {
     await roomClient.leaveCurrentRoom();
+    setView("main");
+  }
+
+  async function handleBackToHome() {
+    await handleLeaveRoom();
     startTransition(() => {
       router.refresh();
     });
@@ -100,7 +105,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
         isHost={roomClient.isHost && roomClient.currentRoom.kind === "private"}
         serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
         statusMessage={roomClient.statusMessage}
-        onLeave={roomClient.leaveCurrentRoom}
+        onLeave={handleLeaveRoom}
         onPlayAgain={roomClient.restartCurrentRoom}
         onQueueAgain={handleQueueAgain}
         onBackToHome={handleBackToHome}
@@ -136,7 +141,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
             canStart={roomClient.canStartCurrentRoom}
             statusMessage={roomClient.statusMessage}
             onStart={roomClient.startCurrentRoom}
-            onLeave={roomClient.leaveCurrentRoom}
+            onLeave={handleLeaveRoom}
           />
         </div>
       </MenuShell>
