@@ -7,7 +7,7 @@ import { GameBoard } from "@/components/game/game-board";
 import { MenuShell } from "@/components/menu/menu-shell";
 import {
   applySelectionBoxToGame,
-  getSelectionPreview,
+  createSelectionPreview,
   synchronizeGameClock,
   type GameState,
   type NormalizedSelectionBox,
@@ -25,14 +25,19 @@ interface PrivateMatchGameProps {
   onPlayAgain: () => void;
   onQueueAgain: (kind: QueueKind) => Promise<void>;
   onBackToHome: () => Promise<void>;
-  onSubmitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
+  onSubmitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<GameState | null>;
 }
 
-interface DragSelection {
-  startX: number;
-  startY: number;
-  currentX: number;
-  currentY: number;
+interface ActiveDrag {
+  pointerId: number;
+  start: { x: number; y: number };
+  frame: number | null;
+}
+
+interface PendingMoves {
+  confirmed: GameState;
+  projected: GameState;
+  boxes: NormalizedSelectionBox[];
 }
 
 export function PrivateMatchGame({
@@ -47,10 +52,11 @@ export function PrivateMatchGame({
   onBackToHome,
   onSubmitSelectionBox,
 }: PrivateMatchGameProps) {
-  const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
+  const [selectionBox, setSelectionBox] = useState<NormalizedSelectionBox | null>(null);
+  const activeDrag = useRef<ActiveDrag | null>(null);
+  const pendingMoves = useRef<PendingMoves | null>(null);
   const [renderNow, setRenderNow] = useState(() => Date.now());
   const [optimisticGameState, setOptimisticGameState] = useState<GameState | null>(null);
-  const [isSubmittingMove, setIsSubmittingMove] = useState(false);
   const { volume: soundEffectsVolume } = useSoundEffectsVolume();
 
   useEffect(() => {
@@ -60,6 +66,8 @@ export function PrivateMatchGame({
 
     return () => {
       window.clearInterval(intervalId);
+      const frame = activeDrag.current?.frame;
+      if (frame != null) window.cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -79,40 +87,15 @@ export function PrivateMatchGame({
   const myPlacement =
     standings.findIndex((playerState) => playerState.userId === userId) + 1;
   const myAuthoritativeGameState = getLiveGameState(myPlayer, room.startedAt, authoritativeNow);
-  const myGameState = optimisticGameState
+  const myGameState = optimisticGameState && room.status === "active"
     ? getLiveGameStateFromState(optimisticGameState, room.startedAt, authoritativeNow)
     : myAuthoritativeGameState;
 
-  useEffect(() => {
-    if (!optimisticGameState) {
-      return;
-    }
-
-    if (!myAuthoritativeGameState) {
-      setOptimisticGameState(null);
-      setIsSubmittingMove(false);
-      return;
-    }
-
-    if (
-      myAuthoritativeGameState.appliedMoveCount >= optimisticGameState.appliedMoveCount ||
-      myAuthoritativeGameState.status !== "active"
-    ) {
-      setOptimisticGameState(null);
-      setIsSubmittingMove(false);
-    }
-  }, [myAuthoritativeGameState, optimisticGameState]);
-
-  const visualSelectionRect = dragSelection
-    ? {
-        top: Math.min(dragSelection.startY, dragSelection.currentY),
-        left: Math.min(dragSelection.startX, dragSelection.currentX),
-        width: Math.abs(dragSelection.currentX - dragSelection.startX),
-        height: Math.abs(dragSelection.currentY - dragSelection.startY),
-      }
-    : null;
-  const previewSelectionBox: NormalizedSelectionBox | null = visualSelectionRect;
-  const preview = myGameState ? getSelectionPreview(myGameState, previewSelectionBox) : null;
+  const board = myGameState?.board;
+  const preview = useMemo(
+    () => board ? createSelectionPreview(board, selectionBox) : null,
+    [board, selectionBox],
+  );
   const previewSelectedIds = useMemo(
     () => new Set(preview?.selectedCellIds ?? []),
     [preview],
@@ -132,13 +115,11 @@ export function PrivateMatchGame({
   const isInteractive =
     room.status === "active" &&
     !!myGameState &&
-    myGameState.status === "active" &&
-    !isSubmittingMove;
+    myGameState.status === "active";
   const isMatchFinished =
     room.status === "finished" ||
     (!!myGameState && standings.every((playerState) => playerState.gameState?.status === "ended"));
   const boxOfTenSoundRef = useRef<HTMLAudioElement | null>(null);
-  const lastMatchIdRef = useRef(room.matchId);
   const lastCountdownSecondRef = useRef<number | null>(null);
   const lastPlayedMoveCountRef = useRef(myGameState?.appliedMoveCount ?? 0);
   const lastGameStatusRef = useRef(myGameState?.status ?? null);
@@ -267,16 +248,6 @@ export function PrivateMatchGame({
     };
   }, []);
 
-  useEffect(() => {
-    if (lastMatchIdRef.current === room.matchId) {
-      return;
-    }
-
-    lastMatchIdRef.current = room.matchId;
-    lastCountdownSecondRef.current = countdownSecondsRemaining;
-    lastPlayedMoveCountRef.current = appliedMoveCount;
-    lastGameStatusRef.current = myGameState?.status ?? null;
-  }, [appliedMoveCount, countdownSecondsRemaining, myGameState?.status, room.matchId]);
 
   useEffect(() => {
     if (countdownSecondsRemaining === null) {
@@ -293,11 +264,11 @@ export function PrivateMatchGame({
   }, [countdownSecondsRemaining]);
 
   useEffect(() => {
-    if (appliedMoveCount <= lastPlayedMoveCountRef.current) {
+    const previousMoveCount = lastPlayedMoveCountRef.current;
+    lastPlayedMoveCountRef.current = appliedMoveCount;
+    if (appliedMoveCount <= previousMoveCount) {
       return;
     }
-
-    lastPlayedMoveCountRef.current = appliedMoveCount;
 
     if (lastMoveWasValid && lastMoveSelectedSum === 10) {
       playBoxOfTenSound();
@@ -329,9 +300,9 @@ export function PrivateMatchGame({
   }
 
   return (
-    <MenuShell connectionStatus="connected" contentClassName="max-w-[1400px]">
+    <MenuShell connectionStatus="connected" contentClassName="max-w-[1400px]" animateDecorations={false}>
       <div className="flex flex-col items-center gap-6">
-        <div className="w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.94))] p-5 shadow-[0_28px_120px_rgba(6,4,18,0.52)] backdrop-blur-xl sm:p-6">
+        <div className="w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(48,30,20,0.92),rgba(30,21,15,0.94))] p-5 shadow-[0_28px_120px_rgba(6,4,18,0.52)] sm:p-6">
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="grid flex-1 gap-3 sm:grid-cols-3">
               <ScoreCard
@@ -385,7 +356,7 @@ export function PrivateMatchGame({
                   rows={myGameState.config.rows}
                   cols={myGameState.config.cols}
                   selectedCellIds={previewSelectedIds}
-                  visualSelectionRect={visualSelectionRect}
+                  visualSelectionRect={isInteractive ? selectionBox : null}
                   selectionState={selectionState}
                   isInteractive={isInteractive}
                   showDisabledState={room.status !== "active" || myGameState.status !== "active"}
@@ -493,114 +464,106 @@ export function PrivateMatchGame({
   );
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!isInteractive) {
+    if (!isInteractive || activeDrag.current || event.button !== 0) {
       return;
     }
 
     unlockSoundEffects();
-
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (bounds.width === 0 || bounds.height === 0) {
-      return;
-    }
-
-    const relativeX = (event.clientX - bounds.left) / bounds.width;
-    const relativeY = (event.clientY - bounds.top) / bounds.height;
-
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragSelection({
-      startX: relativeX,
-      startY: relativeY,
-      currentX: relativeX,
-      currentY: relativeY,
-    });
+    activeDrag.current = {
+      pointerId: event.pointerId,
+      start: boardPoint(event.currentTarget, event.clientX, event.clientY),
+      frame: null,
+    };
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!dragSelection || !isInteractive) {
-      return;
-    }
+    const drag = activeDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId || !isInteractive) return;
 
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (bounds.width === 0 || bounds.height === 0) {
-      return;
-    }
-
-    const relativeX = (event.clientX - bounds.left) / bounds.width;
-    const relativeY = (event.clientY - bounds.top) / bounds.height;
-
-    setDragSelection((currentSelection) => {
-      if (!currentSelection) {
-        return currentSelection;
-      }
-
-      return {
-        ...currentSelection,
-        currentX: relativeX,
-        currentY: relativeY,
-      };
+    const { currentTarget, clientX, clientY } = event;
+    if (drag.frame !== null) window.cancelAnimationFrame(drag.frame);
+    drag.frame = window.requestAnimationFrame(() => {
+      drag.frame = null;
+      setSelectionBox(boxBetween(drag.start, boardPoint(currentTarget, clientX, clientY)));
     });
   }
 
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (!dragSelection) {
-      return;
-    }
+    const drag = activeDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
 
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const relativeX =
-      bounds.width === 0 ? dragSelection.currentX : (event.clientX - bounds.left) / bounds.width;
-    const relativeY =
-      bounds.height === 0 ? dragSelection.currentY : (event.clientY - bounds.top) / bounds.height;
-
-    const finishedSelectionBox = {
-      top: Math.min(dragSelection.startY, relativeY),
-      left: Math.min(dragSelection.startX, relativeX),
-      width: Math.abs(relativeX - dragSelection.startX),
-      height: Math.abs(relativeY - dragSelection.startY),
-    };
-
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    setDragSelection(null);
-
-    if (finishedSelectionBox.width > 0 && finishedSelectionBox.height > 0 && isInteractive) {
-      void submitOptimisticMove(finishedSelectionBox);
-    }
+    const end = boardPoint(event.currentTarget, event.clientX, event.clientY);
+    handlePointerCancel(event);
+    if (isInteractive) void submitOptimisticMove(boxBetween(drag.start, end));
   }
 
   function handlePointerCancel(event: PointerEvent<HTMLDivElement>) {
+    const drag = activeDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    activeDrag.current = null;
+    if (drag.frame !== null) window.cancelAnimationFrame(drag.frame);
+    setSelectionBox(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-
-    setDragSelection(null);
   }
 
   async function submitOptimisticMove(selectionBox: NormalizedSelectionBox) {
-    if (!myGameState) {
-      return;
+    const base = pendingMoves.current?.projected ?? myAuthoritativeGameState;
+    if (!base) return;
+
+    const liveBase = getLiveGameStateFromState(base, room.startedAt, Date.now() + serverTimeOffsetMs);
+    const projected = applySelectionBoxToGame(liveBase, selectionBox);
+    if (projected.appliedMoveCount === liveBase.appliedMoveCount) return;
+
+    const moves = pendingMoves.current ?? { confirmed: liveBase, projected, boxes: [] };
+    pendingMoves.current = moves;
+    moves.boxes.push(selectionBox);
+    moves.projected = projected;
+    setOptimisticGameState(projected);
+
+    const confirmed = await onSubmitSelectionBox(selectionBox);
+    const index = moves.boxes.indexOf(selectionBox);
+    if (index === -1) return;
+
+    // Socket.IO delivers submitted moves in order. A successful response includes
+    // the server board after that move, including any earlier submissions.
+    if (confirmed) {
+      moves.confirmed = confirmed;
+      moves.boxes.splice(0, index + 1);
+    } else {
+      moves.boxes.splice(index, 1);
     }
 
-    const optimisticNextState = applySelectionBoxToGame(myGameState, selectionBox);
-
-    if (optimisticNextState.appliedMoveCount === myGameState.appliedMoveCount) {
-      return;
-    }
-
-    setOptimisticGameState(optimisticNextState);
-    setIsSubmittingMove(true);
-
-    const wasAccepted = await onSubmitSelectionBox(selectionBox);
-
-    if (!wasAccepted) {
+    if (moves.boxes.length === 0) {
+      pendingMoves.current = null;
       setOptimisticGameState(null);
-      setIsSubmittingMove(false);
+      return;
     }
+
+    moves.projected = moves.boxes.reduce(applySelectionBoxToGame, moves.confirmed);
+    setOptimisticGameState(moves.projected);
   }
+}
+
+function boardPoint(board: HTMLDivElement, x: number, y: number) {
+  const bounds = board.getBoundingClientRect();
+  return {
+    x: (x - bounds.left - board.clientLeft) / Math.max(1, board.clientWidth),
+    y: (y - bounds.top - board.clientTop) / Math.max(1, board.clientHeight),
+  };
+}
+
+function boxBetween(start: { x: number; y: number }, end: { x: number; y: number }) {
+  return {
+    left: Math.min(start.x, end.x),
+    top: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+  };
 }
 
 function getLiveGameStateFromState(

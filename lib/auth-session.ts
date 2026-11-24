@@ -8,10 +8,11 @@ import { redirect } from "next/navigation";
 import { ensureProfileIdentity, getMatchHistoryForUser } from "@/lib/profile";
 
 export const getOptionalViewer = cache(async () => {
+  const requestHeaders = await headers();
   try {
     const { auth } = await import("@/lib/auth");
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: requestHeaders,
     });
 
     if (!session) {

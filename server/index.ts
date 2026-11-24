@@ -200,20 +200,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:leave", async (request, ack) => {
+    const finishedMatch = roomRegistry.getFinishedMatch(request.roomId);
     const result = roomRegistry.leaveRoom(request.roomId, socket.data.userId);
 
     if (result.ok) {
       socket.leave(request.roomId);
       socket.data.roomId = null;
-      await safePersist(
-        result.room,
-        result.room.players.length === 0
-          ? {
-              completionReason: MatchCompletionReason.EMPTY_ROOM,
-              forceStatus: MatchStatus.CANCELLED,
-            }
-          : undefined,
-      );
+      await persistDeparture(result.room, finishedMatch);
       io.to(request.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
@@ -262,10 +255,11 @@ io.on("connection", (socket) => {
       request.roomId,
       socket.data.userId,
       request.selectionBox,
+      request.matchId,
     );
 
     if (result.ok) {
-      io.to(request.roomId).emit("room:updated", result.room);
+      socket.to(request.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
     }
@@ -275,24 +269,18 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     matchmaking.clearDisconnectedPlayer(socket.data.userId, socket.id);
-    const room = roomRegistry.disconnectSession(socket.data.userId, socket.id, socket.data.roomId);
+    const roomId = socket.data.roomId;
+    const finishedMatch = roomId ? roomRegistry.getFinishedMatch(roomId) : null;
+    const room = roomRegistry.disconnectSession(socket.data.userId, socket.id, roomId);
 
     if (room) {
-      await safePersist(
-        room,
-        room.players.length === 0
-          ? {
-              completionReason: MatchCompletionReason.EMPTY_ROOM,
-              forceStatus: MatchStatus.CANCELLED,
-            }
-          : undefined,
-      );
+      await persistDeparture(room, finishedMatch);
       io.to(room.roomId).emit("room:updated", room);
     }
   });
 });
 
-httpServer.listen(config.port, () => {
+httpServer.listen(config.port, config.host, () => {
   console.log(
     `[fruitbox-realtime] listening on http://localhost:${config.port} (cors: ${config.corsOrigin})`,
   );
@@ -306,6 +294,27 @@ function scheduleRoomRefresh(roomId: string, delayMs: number) {
   setTimeout(() => {
     void refreshRoom(roomId);
   }, Math.max(0, delayMs));
+}
+
+async function persistDeparture(
+  room: import("../lib/multiplayer").RoomSnapshot,
+  finishedMatch: import("../lib/multiplayer").RoomSnapshot | null,
+) {
+  if (finishedMatch) {
+    // A departure changes the lobby roster, but must preserve final standings.
+    await safePersist(finishedMatch);
+    return;
+  }
+
+  await safePersist(
+    room,
+    room.players.length === 0
+      ? {
+          completionReason: MatchCompletionReason.EMPTY_ROOM,
+          forceStatus: MatchStatus.CANCELLED,
+        }
+      : undefined,
+  );
 }
 
 async function refreshRoom(roomId: string) {
@@ -381,6 +390,10 @@ async function safePersist(
   },
 ) {
   try {
+    if (room.status === "finished" && options?.forceStatus !== MatchStatus.CANCELLED) {
+      const finishedMatch = roomRegistry.getFinishedMatch(room.roomId);
+      if (finishedMatch?.matchId === room.matchId) room = finishedMatch;
+    }
     await persistRoomSnapshot(room, options);
     const appliedRatings =
       options?.forceStatus === MatchStatus.CANCELLED ? null : await maybeApplyRoomRatings(room);

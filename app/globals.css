@@ -73,3 +73,7 @@ button {
 .menu-pulse {
   animation: menu-pulse 5s ease-in-out infinite;
 }
+
+.static-menu-decorations :is(.menu-float, .menu-float-slow, .menu-pulse) {
+  animation: none;
+}

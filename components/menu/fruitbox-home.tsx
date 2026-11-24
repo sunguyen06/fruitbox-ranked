@@ -81,8 +81,13 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
     });
   }
 
-  async function handleBackToHome() {
+  async function handleLeaveRoom() {
     await roomClient.leaveCurrentRoom();
+    setView("main");
+  }
+
+  async function handleBackToHome() {
+    await handleLeaveRoom();
     startTransition(() => {
       router.refresh();
     });
@@ -95,12 +100,13 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
   ) {
     return (
       <PrivateMatchGame
+        key={roomClient.currentRoom.matchId}
         room={roomClient.currentRoom}
         userId={roomClient.userId}
         isHost={roomClient.isHost && roomClient.currentRoom.kind === "private"}
         serverTimeOffsetMs={roomClient.serverTimeOffsetMs}
         statusMessage={roomClient.statusMessage}
-        onLeave={roomClient.leaveCurrentRoom}
+        onLeave={handleLeaveRoom}
         onPlayAgain={roomClient.restartCurrentRoom}
         onQueueAgain={handleQueueAgain}
         onBackToHome={handleBackToHome}
@@ -111,7 +117,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
 
   if (roomClient.currentQueue && initialViewer) {
     return (
-      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer} showRankedLeaderboard>
         <div className="flex flex-col items-center gap-8">
           <FruitboxRankedLogo compact />
           <PublicMatchmakingPanel
@@ -127,7 +133,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
 
   if (roomClient.currentRoom) {
     return (
-      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer} showRankedLeaderboard>
         <div className="flex flex-col items-center gap-8">
           <FruitboxRankedLogo compact />
           <PrivateRoomLobby
@@ -136,7 +142,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
             canStart={roomClient.canStartCurrentRoom}
             statusMessage={roomClient.statusMessage}
             onStart={roomClient.startCurrentRoom}
-            onLeave={roomClient.leaveCurrentRoom}
+            onLeave={handleLeaveRoom}
           />
         </div>
       </MenuShell>
@@ -145,7 +151,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
 
   if (view === "join-private") {
     return (
-      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
+      <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer} showRankedLeaderboard>
         <div className="flex flex-col items-center gap-8">
           <FruitboxRankedLogo compact />
           <JoinPrivateRoomPanel
@@ -173,7 +179,7 @@ export function FruitboxHome({ fallbackSeed, initialViewer }: FruitboxHomeProps)
   }
 
   return (
-    <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer}>
+    <MenuShell connectionStatus={roomClient.connectionStatus} viewer={initialViewer} showRankedLeaderboard>
       <div className="flex flex-col items-center gap-8">
         <FruitboxRankedLogo compact={false} />
         <MainMenu

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 
 export async function GET() {
+  const requestHeaders = await headers();
   try {
     const { auth } = await import("@/lib/auth");
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: requestHeaders,
     });
 
     if (!session) {

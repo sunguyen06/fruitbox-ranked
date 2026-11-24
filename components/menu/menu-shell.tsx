@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 
 import { AccountMenu } from "@/components/menu/account-menu";
+import { RankedLeaderboard } from "@/components/menu/ranked-leaderboard";
 
 interface MenuShellProps {
   connectionStatus:
@@ -52,6 +53,8 @@ interface MenuShellProps {
     }>;
   } | null;
   contentClassName?: string;
+  animateDecorations?: boolean;
+  showRankedLeaderboard?: boolean;
   children: ReactNode;
 }
 
@@ -75,10 +78,12 @@ export function MenuShell({
   connectionStatus,
   viewer,
   contentClassName,
+  animateDecorations = true,
+  showRankedLeaderboard = false,
   children,
 }: MenuShellProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#1a130f] text-white">
+    <main className={`relative min-h-screen overflow-hidden bg-[#1a130f] text-white${animateDecorations ? "" : " static-menu-decorations"}`}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,179,71,0.16),_transparent_28%),radial-gradient(circle_at_20%_80%,_rgba(76,175,80,0.12),_transparent_25%),linear-gradient(180deg,#1a130f_0%,#231710_52%,#18110d_100%)]" />
       <div className="menu-pulse absolute left-1/2 top-[72%] h-[30rem] w-[42rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,_rgba(255,111,53,0.2)_0%,_rgba(255,179,71,0.1)_42%,_transparent_72%)] blur-3xl" />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
@@ -86,10 +91,12 @@ export function MenuShell({
       <Decorations />
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="flex items-center justify-between px-4 py-5 sm:px-8 lg:px-12">
-          <div className="rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-[#f2d9be] backdrop-blur">
-            Fruitbox Portal
-          </div>
+        <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-5 sm:px-8 lg:px-12">
+          {showRankedLeaderboard ? <RankedLeaderboard /> : (
+            <div className="rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-[#f2d9be] backdrop-blur">
+              Fruitbox Portal
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <AccountMenu viewer={viewer ?? null} />
