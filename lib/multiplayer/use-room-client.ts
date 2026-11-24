@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { NormalizedSelectionBox } from "../game";
+import type { GameState, NormalizedSelectionBox } from "../game";
 import { useRealtimeConnection } from "./use-realtime-connection";
 import type {
   MatchmakingQueueSnapshot,
@@ -31,7 +31,7 @@ export interface RoomClientState {
   leaveCurrentRoom: () => Promise<void>;
   startCurrentRoom: () => Promise<void>;
   restartCurrentRoom: () => Promise<void>;
-  submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<boolean>;
+  submitSelectionBox: (selectionBox: NormalizedSelectionBox) => Promise<GameState | null>;
   clearStatus: () => void;
 }
 
@@ -210,23 +210,28 @@ export function useRoomClient(
   }
 
   async function submitSelectionBox(selectionBox: NormalizedSelectionBox) {
-    if (!connection.socket || !currentRoom) {
-      return false;
+    const socket = connection.socket;
+    if (!socket?.connected || !currentRoom) {
+      return null;
     }
 
-    const response = await emitRoomCommand((ack) =>
-      connection.socket!.emit(
-        "room:move",
-        {
-          roomId: currentRoom.roomId,
-          selectionBox,
-        },
-        ack,
-      ),
-    );
+    try {
+      const response: RoomCommandResponse = await socket.timeout(5_000).emitWithAck("room:move", {
+        roomId: currentRoom.roomId,
+        matchId: currentRoom.matchId,
+        selectionBox,
+      });
+      if (!response.ok) return null;
 
-    applyRoomResponse(response, setCurrentRoom, setLastError, setStatusMessage, setServerTimeOffsetMs);
-    return response.ok;
+      const room = response.room;
+      setCurrentRoom((current) =>
+        current && current.matchId === room.matchId && current.serverNow <= room.serverNow ? room : current,
+      );
+      return room.playerStates.find((player) => player.userId === connection.session?.userId)?.gameState ?? null;
+    } catch {
+      setStatusMessage("The server did not confirm your move.");
+      return null;
+    }
   }
 
   async function restartCurrentRoom() {

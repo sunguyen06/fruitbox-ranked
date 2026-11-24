@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +32,19 @@ function run(label, args, env) {
 
 function stopChildren() {
   for (const child of children) child.kill();
+}
+
+function checkPort(url) {
+  const { hostname, port } = new URL(url);
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", (error) => {
+      reject(error.code === "EADDRINUSE"
+        ? new Error(`Port ${port} is already in use. Stop the running demo and try again.`)
+        : error);
+    });
+    probe.listen(Number(port), hostname, () => probe.close(resolve));
+  });
 }
 
 async function prepare() {
@@ -80,6 +94,23 @@ async function prepare() {
   };
 }
 
+async function hasCurrentPrismaClient() {
+  try {
+    const generated = join(workspace, "generated/prisma");
+    const [schema, clientSchema, dependency, client] = await Promise.all([
+      readFile(join(databaseDir, "schema.prisma"), "utf8"),
+      readFile(join(generated, "schema.prisma"), "utf8"),
+      readFile(join(dependencies, "@prisma/client/package.json"), "utf8"),
+      readFile(join(generated, "package.json"), "utf8"),
+    ]);
+    return schema.replaceAll("\r\n", "\n") === clientSchema.replaceAll("\r\n", "\n")
+      && JSON.parse(dependency).version === JSON.parse(client).version;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     stopChildren();
@@ -88,11 +119,16 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
+  await Promise.all([checkPort(webUrl), checkPort(realtimeUrl)]);
   const env = await prepare();
   const prisma = join(dependencies, "prisma/build/index.js");
   const next = join(dependencies, "next/dist/bin/next");
   await run("Prisma schema setup", [prisma, "db", "push", "--skip-generate"], env);
-  await run("Prisma client generation", [prisma, "generate"], env);
+  await run("Prisma schema formatting", [prisma, "format"], env);
+  // Avoid replacing the native client on every demo restart, especially on Windows.
+  if (!await hasCurrentPrismaClient()) {
+    await run("Prisma client generation", [prisma, "generate"], env);
+  }
   await run("Next.js build", [next, "build", "--webpack"], env);
   console.log(`\nFruitbox Ranked offline demo: ${webUrl}\nLocal demo data: ${join(databaseDir, "demo.sqlite")}\n`);
   await Promise.race([

@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { memo } from "react";
 import type { PointerEventHandler } from "react";
 
 import type { Board } from "@/lib/game";
@@ -73,32 +73,12 @@ export function GameBoard({
                 );
               }
 
-              const isSelected = selectedCellIds.has(cell.id);
-              const appleImage = isSelected
-                ? selectionState === "valid"
-                  ? "/green-apple.png"
-                  : "/yellow-apple.png"
-                : "/apple.png";
-
               return (
-                <div key={cell.id} className="h-full w-full">
-                  <div
-                    className={cx(
-                      "relative flex h-full w-full items-center justify-center overflow-hidden transition duration-100",
-                    )}
-                  >
-                    <Image
-                      src={appleImage}
-                      alt="apple"
-                      fill
-                      sizes="(max-width: 1100px) 100vw, 1100px"
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                    <span className="relative z-10 font-mono text-2xl font-bold text-white">
-                      {cell.value}
-                    </span>
-                  </div>
-                </div>
+                <AppleCell
+                  key={cell.id}
+                  value={cell.value}
+                  highlight={selectedCellIds.has(cell.id) ? selectionState : "idle"}
+                />
               );
             }),
           )}
@@ -124,6 +104,24 @@ export function GameBoard({
     </div>
   );
 }
+
+const AppleCell = memo(function AppleCell({ value, highlight }: {
+  value: number;
+  highlight: SelectionState;
+}) {
+  return (
+    <div
+      className="flex h-full w-full items-center justify-center bg-no-repeat font-mono text-2xl font-bold text-white"
+      style={{
+        backgroundImage: "url('/board-apples.webp')",
+        backgroundSize: "300% 100%",
+        backgroundPositionX: highlight === "valid" ? "50%" : highlight === "invalid" ? "100%" : "0%",
+      }}
+    >
+      {value}
+    </div>
+  );
+});
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");

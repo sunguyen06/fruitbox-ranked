@@ -115,6 +115,7 @@ export interface LeaveQueueRequest {
 
 export interface SubmitMoveRequest {
   roomId: RoomId;
+  matchId?: MatchId;
   selectionBox: NormalizedSelectionBox;
 }
 

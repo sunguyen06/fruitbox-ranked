@@ -419,11 +419,16 @@ export class RoomRegistry {
     roomId: RoomId,
     userId: UserId,
     selectionBox: NormalizedSelectionBox,
+    matchId?: MatchId,
   ): RoomCommandResponse {
     const room = this.rooms.get(roomId);
 
     if (!room) {
       return failure("room-not-found", "Room was not found.");
+    }
+
+    if (matchId !== undefined && room.matchId !== matchId) {
+      return failure("invalid-request", "This move belongs to a previous match.");
     }
 
     const nowMs = Date.now();

@@ -255,10 +255,11 @@ io.on("connection", (socket) => {
       request.roomId,
       socket.data.userId,
       request.selectionBox,
+      request.matchId,
     );
 
     if (result.ok) {
-      io.to(request.roomId).emit("room:updated", result.room);
+      socket.to(request.roomId).emit("room:updated", result.room);
     } else {
       socket.emit("room:error", result.error);
     }
